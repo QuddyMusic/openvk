@@ -7,6 +7,7 @@ services:
     restart: unless-stopped
     ports:
       - 8080:80
+      - 8888:80
     volumes:
       - openvk-storage:/opt/chandler/extensions/available/openvk/storage
       - openvk-audios:/opt/chandler/extensions/available/openvk/tmp/api-storage/audios
@@ -22,6 +23,24 @@ services:
         source: ./chandler.yml
         target: /opt/chandler/chandler.yml
         read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./MessengerPresenter.php
+        target: /opt/chandler/extensions/available/openvk/Web/Presenters/MessengerPresenter.php
+        read_only: false
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./App.latte
+        target: /opt/chandler/extensions/available/openvk/Web/Presenters/templates/Messenger/App.latte
+        read_only: false
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./Message.php
+        target: /opt/chandler/extensions/available/openvk/Web/Models/Entities/Message.php
+        read_only: false
         bind:
           create_host_path: false
     depends_on:
