@@ -17,3 +17,10 @@ storage/*
 
 .idea
 .php-cs-fixer.cache
+
+*.backup
+*.bak
+
+install/automated/docker/init-*.sql
+install/automated/docker/sqls/
+
