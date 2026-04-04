@@ -1,20 +1,134 @@
+name: openvk-dev
+
 services:
-  openvk:
-    build:
-      context: ../../..
-      dockerfile: install/automated/docker/openvk.Dockerfile
-    develop:
-      watch:
-        - path: ../../..
-          action: sync
-          target: /opt/chandler/extensions/available/openvk
-          ignore:
-            - vendor/
-        - path: ../../../composer.json
-          action: rebuild
-        - path: ../../../composer.lock
-          action: rebuild
-        - path: ../../../Web/static/js/package-lock.json
-          action: rebuild
-        - path: ../../../Web/static/js/package.json
-          action: rebuild
+  openvk-dev:
+    image: ghcr.io/openvk/openvk/openvk:latest
+    container_name: openvk-dev
+    restart: unless-stopped
+    ports:
+      - "9999:80"
+    volumes:
+      - openvk-dev-storage:/opt/chandler/extensions/available/openvk/storage
+      - openvk-dev-audios:/opt/chandler/extensions/available/openvk/tmp/api-storage/audios
+      - openvk-dev-photos:/opt/chandler/extensions/available/openvk/tmp/api-storage/photos
+      - openvk-dev-videos:/opt/chandler/extensions/available/openvk/tmp/api-storage/videos
+      - type: bind
+        source: ./openvk.dev.yml
+        target: /opt/chandler/extensions/available/openvk/openvk.yml
+        read_only: false
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./chandler.dev.yml
+        target: /opt/chandler/chandler.yml
+        read_only: false
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./MessengerPresenter.php
+        target: /opt/chandler/extensions/available/openvk/Web/Presenters/MessengerPresenter.php
+        read_only: false
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./App.latte
+        target: /opt/chandler/extensions/available/openvk/Web/Presenters/templates/Messenger/App.latte
+        read_only: false
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./Message.php
+        target: /opt/chandler/extensions/available/openvk/Web/Models/Entities/Message.php
+        read_only: false
+        bind:
+          create_host_path: false
+    depends_on:
+      mariadb-primary-dev:
+          condition: service_healthy
+      mariadb-eventdb-dev:
+          condition: service_healthy
+      acl_handler-dev:
+          condition: service_started
+      kafka-dev:
+          condition: service_started
+
+  acl_handler-dev:
+    image: docker.io/alpine:edge
+    container_name: acl_handler-dev
+    restart: unless-stopped
+    entrypoint: /bin/sh
+    command: -c "/bin/acl_handler.sh"
+    volumes:
+      - openvk-dev-storage:/opt/chandler/extensions/available/openvk/storage
+      - openvk-dev-audios:/opt/chandler/extensions/available/openvk/tmp/api-storage/audios
+      - openvk-dev-photos:/opt/chandler/extensions/available/openvk/tmp/api-storage/photos
+      - openvk-dev-videos:/opt/chandler/extensions/available/openvk/tmp/api-storage/videos
+      - type: bind
+        source: ./acl_handler.sh
+        target: /bin/acl_handler.sh
+        read_only: true
+        bind:
+          create_host_path: false
+
+  mariadb-primary-dev:
+    image: mariadb:10.9
+    container_name: mariadb-primary-dev
+    restart: unless-stopped
+    volumes:
+      - mariadb-primary-dev:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      start_period: 10s
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    environment:
+      - MARIADB_DATABASE=db_dev
+      - MARIADB_USER=openvk
+      - MARIADB_PASSWORD=openvk_dev
+      - MARIADB_RANDOM_ROOT_PASSWORD=yes
+
+  mariadb-eventdb-dev:
+    image: mariadb:10.9
+    container_name: mariadb-eventdb-dev
+    restart: unless-stopped
+    volumes:
+      - mariadb-eventdb-dev:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      start_period: 10s
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    environment:
+      - MARIADB_DATABASE=openvk_eventdb_dev
+      - MARIADB_USER=openvk
+      - MARIADB_PASSWORD=openvk_dev
+      - MARIADB_RANDOM_ROOT_PASSWORD=yes
+
+  kafka-dev:
+    image: apache/kafka:4.0.1
+    container_name: kafka-dev
+    restart: unless-stopped
+    volumes:
+      - kafka-dev-data:/var/lib/kafka/data
+    environment:
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_NODE_ID: 1
+      KAFKA_CLUSTER_ID: MkU3OEVCNTcwNTJENDM2Qk
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-dev:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka-dev:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+
+volumes:
+  openvk-dev-storage:
+  openvk-dev-audios:
+  openvk-dev-photos:
+  openvk-dev-videos:
+  mariadb-primary-dev:
+  mariadb-eventdb-dev:
+  kafka-dev-data:
