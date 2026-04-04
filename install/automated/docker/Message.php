@@ -195,14 +195,33 @@ class Message extends RowModel
 			],
 		    ];
 	    } elseif ($attachment instanceof Video) {
-		$attachments[] = [
-		    "type"  => "video",
-		    "link"  => "/video" . $attachment->getPrettyId(),
-		    "video" => [
-			"name"      => $attachment->getName(),
-			"thumbnail" => $attachment->getThumbnailURL(),
-		    ],
-		];
+		    $name = htmlspecialchars($attachment->getName());
+		    $prettyId = $attachment->getPrettyId();
+		    $thumbnail = $attachment->getThumbnailURL();
+		    
+		    if ($attachment->getType() === 0) {
+			$url = $attachment->getURL();
+			$html = "<div style='width:100%'>";
+			$html .= "<div class='bsdn media' data-name='{$name}'>";
+			$html .= "<video class='media' src='{$url}' controls style='max-width:100%;max-height:300px;'></video>";
+			$html .= "</div>";
+			$html .= "<div class='video-wowzer'>";
+			$html .= "<div class='small-video-ico'></div>";
+			$html .= "<a href='/video{$prettyId}' id='videoOpen' data-id='{$prettyId}'>{$name}</a>";
+			$html .= "</div></div>";
+		    } else {
+			$html = "<a href='/video{$prettyId}'>{$name}</a>";
+		    }
+		    
+		    $attachments[] = [
+			"type"  => "video",
+			"link"  => "/video{$prettyId}",
+			"html"  => $html,
+			"video" => [
+			    "name"      => $name,
+			    "thumbnail" => $thumbnail,
+			],
+		    ];
 	    } elseif ($attachment instanceof Document) {
 		$attachments[] = [
 		    "type" => "doc",

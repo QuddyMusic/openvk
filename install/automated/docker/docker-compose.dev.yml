@@ -48,6 +48,18 @@ services:
         read_only: true
         bind:
           create_host_path: false
+      - type: bind
+        source: ./uploads.ini
+        target: /usr/local/etc/php/conf.d/uploads.ini
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./Session.dev.php
+        target: /opt/chandler/chandler/Session/Session.php
+        read_only: true
+        bind:
+          create_host_path: false
     depends_on:
       mariadb-primary-dev:
           condition: service_healthy

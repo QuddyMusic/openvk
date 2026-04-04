@@ -34,6 +34,9 @@
                                 <div data-bind="if: type === 'audio'" class="msg-attach-j-audio" style="width:100%;">
 				    <div data-bind="html: html"></div>
 				</div>
+				<div data-bind="if: type === 'video'" class="msg-attach-j-video" style="width:100%;">
+				    <div data-bind="html: html"></div>
+				</div>
                                 <div data-bind="if: type === 'doc'" class="msg-attach-j-doc">
                                     <a data-bind="attr: { href: link }">📄 <span data-bind="text: doc.name"></span></a>
                                 </div>
@@ -56,7 +59,7 @@
                             placeholder="{_enter_message}"></textarea>
 
 
-		    <form id="msgForm" onsubmit="return false;">
+		    <form id="msgForm" data-id="messenger" onsubmit="return false;">
 		    <div class="post-buttons" style="display: flex; flex-direction: column; margin-top: 4px;">
 			    <div class="post-horizontal"></div>
 			    <div class="post-vertical"></div>
@@ -187,6 +190,41 @@ form#msgForm {
     max-width: 300px;
     margin-top: 4px;
 }
+.msg-attach-j-audio {
+    width: 100%;
+    box-sizing: border-box;
+}
+.msg-attach-j-audio .audioEmbed {
+    max-width: 100% !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+}
+.msg-attach-j-audio > div > .audioEmbed {
+    max-width: 100% !important;
+    width: 100% !important;
+}
+.msg-attach-j-audio .audioEmbed.ctx_place {
+    max-width: 100% !important;
+}
+.messenger-app--messages---message ._content .attachments > .msg-attach-j * {
+    max-width: 100%;
+}
+.messenger-app--messages---message ._content .attachments > .msg-attach-j .audioEmbed {
+    max-width: 100% !important;
+    width: 100% !important;
+}
+.msg-attach-j-audio .audioEntryWrapper {
+    width: 100% !important;
+}
+.msg-attach-j-audio .audioEntry {
+    width: 100% !important;
+}
+.msg-attach-j-audio .status {
+    flex: 1 !important;
+    min-width: 0 !important;
+}
+
+
 </style>
  
     {script "js/node_modules/knockout/build/output/knockout-latest.js"}
@@ -424,7 +462,18 @@ form#msgForm {
             });
         }
     });
-
+	document.querySelector('textarea[name=message]').addEventListener('paste', async (e) => {
+	    const files = e.clipboardData?.files;
+	    if (!files || files.length === 0) return;
+	    
+	    const file = files[0];
+	    if (!file.type.startsWith('image/')) return;
+	    
+	    e.preventDefault();
+	    
+	    const postButtons = u('form#msgForm');
+	    await __uploadToTextarea(file, postButtons);
+	});
         window.Msg = new Messenger([]);
     </script>
 {/block}
