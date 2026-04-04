@@ -194,34 +194,52 @@ class Message extends RowModel
 			    "url"    => $attachment->getURL(),
 			],
 		    ];
-	    } elseif ($attachment instanceof Video) {
-		    $name = htmlspecialchars($attachment->getName());
-		    $prettyId = $attachment->getPrettyId();
-		    $thumbnail = $attachment->getThumbnailURL();
-		    
-		    if ($attachment->getType() === 0) {
-			$url = $attachment->getURL();
-			$html = "<div style='width:100%'>";
-			$html .= "<div class='bsdn media' data-name='{$name}'>";
-			$html .= "<video class='media' src='{$url}' controls style='max-width:100%;max-height:300px;'></video>";
-			$html .= "</div>";
-			$html .= "<div class='video-wowzer'>";
-			$html .= "<div class='small-video-ico'></div>";
-			$html .= "<a href='/video{$prettyId}' id='videoOpen' data-id='{$prettyId}'>{$name}</a>";
-			$html .= "</div></div>";
-		    } else {
-			$html = "<a href='/video{$prettyId}'>{$name}</a>";
-		    }
-		    
-		    $attachments[] = [
-			"type"  => "video",
-			"link"  => "/video{$prettyId}",
-			"html"  => $html,
-			"video" => [
-			    "name"      => $name,
-			    "thumbnail" => $thumbnail,
-			],
-		    ];
+	        } elseif ($attachment instanceof Video) {
+                    $name = htmlspecialchars($attachment->getName());
+                    $prettyId = $attachment->getPrettyId();
+                    // $thumbnail УБРАЛИ ОТСЮДА!
+                    
+                    if ($attachment->getType() === 0) {
+                        // Достаем превьюшку ТОЛЬКО для локальных видео (с диска - это быстро)
+                        $thumbnail = $attachment->getThumbnailURL();
+                        $url = $attachment->getURL();
+                        $html = "<div style='width:100%'>";
+                        $html .= "<div class='media' data-name='{$name}'>";
+                        $html .= "<video class='media' src='{$url}' controls style='max-width:100%;max-height:300px;'></video>";
+                        $html .= "</div>";
+                        $html .= "<div class='video-wowzer'>";
+                        $html .= "<div class='small-video-ico'></div>";
+                        $html .= "<a href='/video{$prettyId}' id='videoOpen' data-id='{$prettyId}'>{$name}</a>";
+                        $html .= "</div></div>";
+                    
+                    } else {
+                        $driver = $attachment->getVideoDriver();
+                        if ($driver) {
+                            $html = "<div style='width:100%;max-width:100%;'>";
+                            $html .= $driver->getEmbed("100%", "225");
+                            $html .= "<div class='video-wowzer'>";
+                            $html .= "<div class='small-video-ico'></div>";
+                            $html .= "<a href='/video{$prettyId}' id='videoOpen' data-id='{$prettyId}'>{$name}</a>";
+                            $html .= "</div></div>";
+                            
+                            // Для YouTube превьюшки нет, ставим пустую строку или заглушку, 
+                            // чтобы JSON не сломался из-за отсутствующей переменной
+                            $thumbnail = ""; 
+                        } else {
+                            $html = "<a href='/video{$prettyId}'>{$name}</a>";
+                            $thumbnail = "";
+                        }
+                    }
+                    
+                    $attachments[] = [
+                        "type"  => "video",
+                        "link"  => "/video{$prettyId}",
+                        "html"  => $html,
+                        "video" => [
+                            "name"      => $name,
+                            "thumbnail" => $thumbnail, // Оставили, чтобы не сломать структуру JSON
+                        ],
+                    ];
 	    } elseif ($attachment instanceof Document) {
 		$attachments[] = [
 		    "type" => "doc",

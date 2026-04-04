@@ -25,3 +25,5 @@ install/automated/docker/init-*.sql
 install/automated/docker/sqls/
 
 install/automated/docker/Session.dev.php
+install/automated/docker/chandler.yml
+install/automated/docker/openvk.yml
