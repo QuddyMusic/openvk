@@ -42,6 +42,12 @@ services:
         read_only: false
         bind:
           create_host_path: false
+      - type: bind
+        source: ./dev-session.ini
+        target: /usr/local/etc/php/conf.d/dev-session.ini
+        read_only: true
+        bind:
+          create_host_path: false
     depends_on:
       mariadb-primary-dev:
           condition: service_healthy
