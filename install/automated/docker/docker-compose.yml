@@ -49,6 +49,18 @@ services:
         read_only: true
         bind:
           create_host_path: false
+      - type: bind
+        source: ./Notifications.php
+        target: /opt/chandler/extensions/available/openvk/ServiceAPI/Notifications.php
+        read_only: false
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./al_notifs.js
+        target: /opt/chandler/extensions/available/openvk/Web/static/js/al_notifs.js
+        read_only: true
+        bind:
+          create_host_path: false
     depends_on:
       mariadb-primary:
           condition: service_healthy
@@ -130,6 +142,7 @@ services:
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_CREATE_TOPICS: "OvkEvents:1:1"
 
   phpmyadmin:
     image: docker.io/phpmyadmin:5

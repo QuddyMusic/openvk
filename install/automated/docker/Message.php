@@ -142,7 +142,7 @@ class Message extends RowModel
 		    ],
 		];
 	    } elseif ($attachment instanceof Audio) {
-		    $id = $attachment->getId() . rand(0, 1000);
+		    $id = "msg" . $this->getId() . "_aud" . $attachment->getId();
 		    $isAvailable = $attachment->isAvailable();
 		    $isWithdrawn = $attachment->isWithdrawn();
 		    $performer = htmlspecialchars($attachment->getPerformer());
@@ -170,6 +170,8 @@ class Message extends RowModel
 		    $html .= "<span class=\"nobold hideOnHover\" data-unformatted=\"{$length}\">{$formattedLength}</span>";
 		    $html .= "<div class=\"buttons\">";
 		    $html .= "<div class=\"add-icon musicIcon hovermeicon\" data-id=\"{$attachment->getId()}\"></div>";
+		    $html .= "<a class=\"download-icon musicIcon\" href=\"" . htmlspecialchars($attachment->getOriginalURL()) . "\" download=\"" . htmlspecialchars($attachment->getDownloadName()) . "\"></a>";
+		    $html .= "<div class=\"edit-icon musicIcon\" data-album-id=\"{$attachment->getAlbumId()}\" data-lyrics=\"" . htmlspecialchars($attachment->getLyrics() ?? '') . "\" data-title=\"{$title}\" data-performer=\"{$performer}\" data-explicit=\"{$attachment->isExplicit()}\" data-searchable=\"" . ((int)!$attachment->isUnlisted()) . "\" data-owner-id=\"{$ownerId}\"></div>";
 		    $html .= "</div></div></div>";
 		    if (!$isWithdrawn) {
 			$html .= "<div class=\"subTracks\" draggable=\"false\">";
@@ -197,10 +199,7 @@ class Message extends RowModel
 	        } elseif ($attachment instanceof Video) {
                     $name = htmlspecialchars($attachment->getName());
                     $prettyId = $attachment->getPrettyId();
-                    // $thumbnail УБРАЛИ ОТСЮДА!
-                    
                     if ($attachment->getType() === 0) {
-                        // Достаем превьюшку ТОЛЬКО для локальных видео (с диска - это быстро)
                         $thumbnail = $attachment->getThumbnailURL();
                         $url = $attachment->getURL();
                         $html = "<div style='width:100%'>";
@@ -221,9 +220,6 @@ class Message extends RowModel
                             $html .= "<div class='small-video-ico'></div>";
                             $html .= "<a href='/video{$prettyId}' id='videoOpen' data-id='{$prettyId}'>{$name}</a>";
                             $html .= "</div></div>";
-                            
-                            // Для YouTube превьюшки нет, ставим пустую строку или заглушку, 
-                            // чтобы JSON не сломался из-за отсутствующей переменной
                             $thumbnail = ""; 
                         } else {
                             $html = "<a href='/video{$prettyId}'>{$name}</a>";
@@ -241,13 +237,63 @@ class Message extends RowModel
                         ],
                     ];
 	    } elseif ($attachment instanceof Document) {
-		$attachments[] = [
-		    "type" => "doc",
-		    "link" => "/doc" . $attachment->getPrettyId(),
-		    "doc"  => [
-			"name" => $attachment->getName(),
-		    ],
-		];
+		    $name = htmlspecialchars($attachment->getName());
+		    $prettyId = $attachment->getPrettyId();
+		    $prettiestId = $attachment->getPrettiestId();
+		    $accessKey = $attachment->getAccessKey();
+		    $link = "/doc{$prettyId}?key={$accessKey}";
+		    $size = readable_filesize($attachment->getFilesize());
+
+		    if ($attachment->isImage()) {
+			$preview = $attachment->hasPreview() ? $attachment->getPreview() : null;
+			$previewUrl = $preview ? $preview->getURLBySizeId('medium') : '';
+			$isGif = $attachment->isGif();
+			$gifUrl = $isGif ? htmlspecialchars($attachment->getURL()) : '';
+
+			$html = "<a href='{$link}' class='docMainItem viewerOpener docGalleryItem" . ($isGif ? " embeddable" : "") . "' data-id='{$prettiestId}' style='display:block;max-width:300px;'>";
+			$html .= "<img class='docGalleryItem_main_preview' loading='lazy' src='{$previewUrl}' alt='gallery photo' style='max-width:100%;'>";
+			if ($isGif) {
+			    $html .= "<div class='play-button'><div class='play-button-ico'></div></div>";
+			    $html .= "<img class='docGalleryItem_gif_preview' loading='lazy' src='{$gifUrl}' alt='gif photo view'>";
+			}
+			$html .= "<div class='doc_top_panel doc_shown_by_hover'>";
+                    	$html .= "<div class='doc_volume_action' id='add_icon'></div>";
+                    	$html .= "</div>";
+                    	$html .= "<div class='doc_bottom_panel doc_content'>";
+                    	$html .= "<span class='doc_bottom_panel_name noOverflow doc_name'>{$name}</span>";
+                    	$html .= "<span class='doc_bottom_panel_size'>{$size}</span>";
+                    	$html .= "</div></a>";
+		    } else {
+			$ext = htmlspecialchars($attachment->getFileExtension());
+			$date = (string) $attachment->getPublicationTime();
+
+			if ($attachment->hasPreview()) {
+			    $preview = $attachment->getPreview();
+			    $iconHtml = "<img class='doc_icon' alt='document_preview' src='{$preview->getURLBySizeId('tiny')}'>";
+			} else {
+			    $iconHtml = "<div class='doc_icon no_image'><span>{$ext}</span></div>";
+			}
+
+			$html = "<div class='docMainItem docListViewItem' data-id='{$prettiestId}' style='width:100%;box-sizing:border-box;'>";
+			$html .= "<a class='viewerOpener' href='{$link}'>{$iconHtml}</a>";
+			$html .= "<div class='doc_content noOverflow' style='flex:1;min-width:0;'>";
+                        $html .= "<a class='viewerOpener noOverflow' href='{$link}'><b class='noOverflow doc_name'>{$name}</b></a>";
+                        $html .= "<div class='doc_content_info'><span>{$date}</span> <span>{$size}</span></div>";
+                    	$html .= "</div>";
+			$html .= "<div class='doc_volume'>";
+			$html .= "<div id='edit_icon'></div>";
+			$html .= "<div id='add_icon'></div>";
+                    	$html .= "</div></div>";
+		    }
+
+		    $attachments[] = [
+			"type" => "doc",
+			"link" => $link,
+			"html" => $html,
+			"doc"  => [
+			    "name" => $attachment->getName(),
+			],
+		    ];
 	    }
 	}
 

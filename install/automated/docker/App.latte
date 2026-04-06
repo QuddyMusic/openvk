@@ -37,9 +37,9 @@
 				<div data-bind="if: type === 'video'" class="msg-attach-j-video" style="width:100%;">
 				    <div data-bind="html: html"></div>
 				</div>
-                                <div data-bind="if: type === 'doc'" class="msg-attach-j-doc">
-                                    <a data-bind="attr: { href: link }">📄 <span data-bind="text: doc.name"></span></a>
-                                </div>
+                                <div data-bind="if: type === 'doc'" class="msg-attach-j-doc" style="width:100%;">
+				    <div data-bind="html: html"></div>
+				</div>
                             </div>
                         </div>
                     </div>
@@ -149,7 +149,6 @@ form#msgForm {
     height: auto !important;
     min-height: 80px;
 }
-
 .messenger-app--input---messagebox {
     overflow: visible !important;
     position: relative;
@@ -213,20 +212,59 @@ form#msgForm {
     max-width: 100% !important;
     width: 100% !important;
 }
-.msg-attach-j-audio .audioEntryWrapper {
+.msg-attach-j-doc .docMainItem.docListViewItem {
     width: 100% !important;
+    box-sizing: border-box;
+    align-items: center;
 }
-.msg-attach-j-audio .audioEntry {
+.msg-attach-j-doc .doc_content {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden !important;
+}
+.msg-attach-j-doc .docListViewItem {
+    min-height: 30px;
+    border-bottom: unset;
+    width: 100%;
+    box-sizing: border-box;
+    display: grid !important;
+    grid-template-columns: 0fr 1fr auto !important;
+    gap: 10px !important;
+    padding: 4px 7px !important;
+}
+.msg-attach-j-doc .doc_volume {
+    display: flex !important;
+    align-items: center !important;
+    gap: 5px !important;
+    visibility: hidden !important;
+}
+.msg-attach-j-doc .docListViewItem:hover .doc_volume {
+    visibility: visible !important;
+}
+.msg-attach-j-doc .docGalleryItem {
+    display: block;
+    min-width: 170px;
+    min-height: 170px;
     width: 100% !important;
+    max-width: 100% !important;
+    height: 200px !important;
+    margin-bottom: 4px;
+    position: relative;
+    overflow: hidden !important;
 }
-.msg-attach-j-audio .status {
-    flex: 1 !important;
-    min-width: 0 !important;
+.msg-attach-j-doc .docGalleryItem.embeddable.playing {
+    height: auto !important;
+    overflow: visible !important;
 }
-
-
+.msg-attach-j-doc .docGalleryItem .play-button {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
 </style>
- 
+
+
     {script "js/node_modules/knockout/build/output/knockout-latest.js"}
     <script>
         function MessengerViewModel(initialMessages = []) {
