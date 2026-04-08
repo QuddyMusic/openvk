@@ -273,6 +273,8 @@ routes:
       handler: "Messenger->apiGetMessages"
     - url: "/im/api/messages{num}/create.json"
       handler: "Messenger->apiWriteMessage"
+    - url: "/im/api/correspondences.json"
+      handler: "Messenger->apiGetCorrespondences"
     - url: "/search"
       handler: "Search->index"
     - url: "/search/content"
