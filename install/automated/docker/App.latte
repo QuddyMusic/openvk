@@ -1,517 +1,702 @@
 {extends "../@layout.latte"}
 {block title}{$correspondent->getCanonicalName()}{/block}
 {block header}
-    
 <a href="/im">{_my_messages}</a> »
-<a href="{$correspondent->getURL()}">{$correspondent->getCanonicalName()}</a>    
-    <div n:if="($online = $correspondent->getOnline()->timestamp()) + 2505600 > time()" style="float: right;">
-        {var $diff = date_diff(date_create(), date_create('@' . $online))}
-        {if 5 >= $diff->i}
-            <span><b>{_online}</b></span>
-        {else}
-            <span>{$correspondent->isFemale() ? tr("was_online_f") : tr("was_online_m")} {$correspondent->getOnline()}</span>
-        {/if}
-    </div>
+<a href="{$correspondent->getURL()}">{$correspondent->getCanonicalName()}</a>
+<div n:if="($online = $correspondent->getOnline()->timestamp()) + 2505600 > time()" style="float:right;">
+    {var $diff = date_diff(date_create(), date_create('@' . $online))}
+    {if 5 >= $diff->i}
+        <span><b>{_online}</b></span>
+    {else}
+        <span>{$correspondent->isFemale() ? tr("was_online_f") : tr("was_online_m")} {$correspondent->getOnline()}</span>
+    {/if}
+</div>
 {/block}
 {block wrap}
-    <div class="messenger-app">
-        <div class="messenger-app--messages" data-bind="event: { scroll: onMessagesScroll }">
-            <div data-bind="foreach: messages">
-                <div class="messenger-app--messages---message" data-bind="css: { unread: !read }">
-                    <img class="ava" data-bind="attr: { src: sender.avatar, alt: sender.name }" />
-                    <div class="_content">
-                        <a href="#" data-bind="attr: { href: sender.link }">
-                            <strong data-bind="text: sender.name"></strong>
-                        </a>
-                        <span class="text" data-bind="html: text"></span>
-                        <div data-bind="foreach: attachments" class="attachments">
-                            <div class="msg-attach-j">
-                                <div data-bind="if: type === 'photo'" class="msg-attach-j-photo">
-				    <a data-bind="attr: { href: link }, click: function(d,e) { OpenMiniature(e.originalEvent || e, photo.url, null, id, null); return false; }">
-					<img data-bind="attr: { src: photo.tiny_url, alt: photo.caption }" style="max-width:100%;max-height:200px;object-fit:contain;display:block;" />
-				    </a>
+<div id="messenger-ko-root">
+<div class="messenger-app">
+
+    {* ACTION BAR *}
+    <div class="msg-action-bar" id="msgActionBar" style="display:none;">
+        <span class="msg-sel-count" id="msgSelCount">0 выбрано</span>
+        <div class="msg-action-btns">
+            <button class="button" onclick="msgVM.cancelSelection()">Отмена</button>
+            <button class="button" id="msgReplyBtn" onclick="msgVM.replySelected()" disabled>Ответить</button>
+            <button class="button" onclick="msgVM.forwardSelected()">Переслать</button>
+        </div>
+    </div>
+
+	{* MESSAGES *}
+	    <div class="messenger-app--messages" data-bind="event: { scroll: onMessagesScroll }">
+		<div data-bind="foreach: messages">
+		    <div class="messenger-app--messages---message"
+			 data-bind="css: { unread: !read, 'msg-selected': selected },
+				    attr: { 'data-uuid': uuid }">
+			<div class="msg-check">
+			    <input type="checkbox" class="msg-select-cb"
+				   data-bind="checked: selected, event: { change: $root.onSelectionChange }, clickBubble: false" />
+			</div>
+			<img class="ava" data-bind="attr: { src: sender.avatar, alt: sender.name }" />
+			<div class="_content">
+			    <a href="#" data-bind="attr: { href: sender.link }">
+				<strong data-bind="text: sender.name"></strong>
+			    </a>
+			    <div data-bind="html: $root.renderReplyTo(reply_to)"></div>
+			    <span class="text" data-bind="html: text"></span>
+			    <div data-bind="html: $root.renderFwdInline(forwarded)"></div>
+			    <div data-bind="foreach: attachments" class="attachments">
+				<div class="msg-attach-j">
+				    <div data-bind="if: type === 'photo'" class="msg-attach-j-photo">
+					<a data-bind="attr: { href: link }, click: function(d,e){ OpenMiniature(e.originalEvent||e, photo.url, null, id, null); return false; }">
+					    <img data-bind="attr: { src: photo.tiny_url, alt: photo.caption }"
+						 style="max-width:100%;max-height:200px;object-fit:contain;display:block;" />
+					</a>
+				    </div>
+				    <div data-bind="if: type === 'audio'" class="msg-attach-j-audio" style="width:100%;">
+					<div data-bind="html: html"></div>
+				    </div>
+				    <div data-bind="if: type === 'video'" class="msg-attach-j-video" style="width:100%;">
+					<div data-bind="html: html"></div>
+				    </div>
+				    <div data-bind="if: type === 'doc'" class="msg-attach-j-doc" style="width:100%;">
+					<div data-bind="html: html"></div>
+				    </div>
 				</div>
-                                <div data-bind="if: type === 'audio'" class="msg-attach-j-audio" style="width:100%;">
-				    <div data-bind="html: html"></div>
-				</div>
-				<div data-bind="if: type === 'video'" class="msg-attach-j-video" style="width:100%;">
-				    <div data-bind="html: html"></div>
-				</div>
-                                <div data-bind="if: type === 'doc'" class="msg-attach-j-doc" style="width:100%;">
-				    <div data-bind="html: html"></div>
-				</div>
+			    </div>
+			</div>
+			<div class="time" align="right">
+			    <span data-bind="html: timing.sent"></span>
+			</div>
+		    </div>
+		</div>
+	    </div>
+
+    {* INPUT *}
+    <div class="messenger-app--input">
+        {if $correspondent->getId() === $thisUser->getId() || $correspondent->getPrivacyPermission('messages.write', $thisUser)}
+            <img class="ava" src="{$thisUser->getAvatarUrl('miniscule')}" alt="{$thisUser->getCanonicalName()}" />
+            <div class="messenger-app--input---messagebox">
+                <div id="msgReplyPreview" class="msg-pending-preview" style="display:none;">
+                    <div class="msg-pending-bar"></div>
+                    <div class="msg-pending-body">
+                        <strong id="replyAuthorName"></strong>
+                        <span id="replyTextPreview"></span>
+                    </div>
+                    <a href="#" class="msg-pending-remove" onclick="window.Msg.clearReply(); return false;">✕</a>
+                </div>
+                <div id="msgFwdPreview" class="msg-pending-preview msg-pending-fwd" style="display:none;">
+                    <span class="msg-fwd-icon">↩</span>
+                    <span id="msgFwdCount">Пересланных сообщений: 0</span>
+                    <a href="#" class="msg-pending-remove" onclick="window.Msg.clearForward(); return false;">✕</a>
+                </div>
+                <textarea data-bind="value: messageContent, event: { keydown: onTextareaKeyPress }"
+                          name="message" placeholder="{_enter_message}"></textarea>
+                <form id="msgForm" data-id="messenger" onsubmit="return false;">
+                    <div class="post-buttons" style="display:flex;flex-direction:column;margin-top:4px;">
+                        <div class="post-horizontal"></div>
+                        <div class="post-vertical"></div>
+                        <div style="display:flex;align-items:center;justify-content:space-between;">
+                            <button class="button" data-bind="click: sendMessage">{_send}</button>
+                            <div class="msg-attach-wrapper">
+                                <a class="msg-attach-toggler">{_attach}</a>
+                                <div id="msgAttachmentMenu" class="hidden">
+                                    <a id="__photoAttachment">
+                                        <img src="/assets/packages/static/openvk/img/oxygen-icons/16x16/mimetypes/application-x-egon.png" />{_photo}
+                                    </a>
+                                    <a id="__videoAttachment">
+                                        <img src="/assets/packages/static/openvk/img/oxygen-icons/16x16/mimetypes/application-vnd.rn-realmedia.png" />{_video}
+                                    </a>
+                                    <a id="__audioAttachment">
+                                        <img src="/assets/packages/static/openvk/img/oxygen-icons/16x16/mimetypes/audio-ac3.png" />{_audio}
+                                    </a>
+                                    <a id="__documentAttachment">
+                                        <img src="/assets/packages/static/openvk/img/oxygen-icons/16x16/mimetypes/application-octet-stream.png" />{_document}
+                                    </a>
+                                    <a onclick="initGraffiti(event);">
+                                        <img src="/assets/packages/static/openvk/img/oxygen-icons/16x16/actions/draw-brush.png" />{_graffiti}
+                                    </a>
+                                </div>
                             </div>
                         </div>
                     </div>
-                    <div class="time" align="right">
-                        <span data-bind="html: timing.sent"></span>
-                    </div>
-                </div>
+                </form>
             </div>
+            <img class="ava" src="{$correspondent->getAvatarUrl('miniscule')}" alt="{$correspondent->getCanonicalName()}" />
+        {else}
+            <div class="blocked" data-localized-text="{_messages_blocked}"></div>
+        {/if}
+    </div>
+</div>
+
+{* FORWARD MODAL *}
+<div id="msgForwardModal" class="ovk-modal-overlay" style="display:none;"
+     onclick="if(event.target===this) window.Msg.closeForwardModal();">
+    <div class="ovk-modal-box fwd-modal-box">
+        <div class="ovk-modal-header">
+            <span>Переслать сообщения</span>
+            <a href="#" class="ovk-modal-close" onclick="window.Msg.closeForwardModal(); return false;">✕</a>
         </div>
-        <div class="messenger-app--input">
-            {if $correspondent->getId() === $thisUser->getId() || $correspondent->getPrivacyPermission('messages.write', $thisUser)}
-                <img class="ava" src="{$thisUser->getAvatarUrl('miniscule')}" alt="{$thisUser->getCanonicalName()}" />
-                <div class="messenger-app--input---messagebox">
-                    <textarea
-                            data-bind="value: messageContent, event: { keydown: onTextareaKeyPress }"
-                            name="message"
-                            placeholder="{_enter_message}"></textarea>
-
-
-		    <form id="msgForm" data-id="messenger" onsubmit="return false;">
-		    <div class="post-buttons" style="display: flex; flex-direction: column; margin-top: 4px;">
-			    <div class="post-horizontal"></div>
-			    <div class="post-vertical"></div>
-			    <div style="display: flex; align-items: center; justify-content: space-between;">
-                        <button class="button" data-bind="click: sendMessage">{_send}</button>
-
-                        <div class="msg-attach-wrapper">
-                            <a class='msg-attach-toggler'>
-                                {_attach}
-                            </a>
-			    <div id="msgAttachmentMenu" class="hidden">
-				<a id="__photoAttachment">
-				    <img src="/assets/packages/static/openvk/img/oxygen-icons/16x16/mimetypes/application-x-egon.png" />
-				    {_photo}
-				</a>
-				<a id="__videoAttachment">
-				    <img src="/assets/packages/static/openvk/img/oxygen-icons/16x16/mimetypes/application-vnd.rn-realmedia.png" />
-				    {_video}
-				</a>
-				<a id="__audioAttachment">
-				    <img src="/assets/packages/static/openvk/img/oxygen-icons/16x16/mimetypes/audio-ac3.png" />
-				    {_audio}
-				</a>
-				<a id="__documentAttachment">
-				    <img src="/assets/packages/static/openvk/img/oxygen-icons/16x16/mimetypes/application-octet-stream.png" />
-				    {_document}
-				</a>
-				<a onclick="initGraffiti(event);">
-				    <img src="/assets/packages/static/openvk/img/oxygen-icons/16x16/actions/draw-brush.png" />
-				    {_graffiti}
-				</a>
-			    </div>
-                        </div>
-                    </div>
-                </div>
-		</div>
-		</form>
-                <img class="ava" src="{$correspondent->getAvatarUrl('miniscule')}" alt="{$correspondent->getCanonicalName()}" />
-            {else}
-                <div class="blocked" data-localized-text="{_messages_blocked}"></div>
-            {/if}
+        <div class="fwd-search-wrap">
+            <input type="text" id="fwdModalSearch" placeholder="Поиск"
+                   oninput="window.Msg._filterFwdConvList(this.value)" />
+        </div>
+        <div id="fwdModalList" class="fwd-conv-list">
+            <div class="fwd-loading">Загрузка…</div>
         </div>
     </div>
+</div>
 
+{* FORWARDED VIEWER *}
+<div id="msgFwdViewer" class="ovk-modal-overlay" style="display:none;"
+     onclick="if(event.target===this) window.Msg.closeFwdViewer();">
+    <div class="ovk-modal-box fwd-viewer-box">
+        <div class="ovk-modal-header">
+            <span>Пересланные сообщения</span>
+            <a href="#" class="ovk-modal-close" onclick="window.Msg.closeFwdViewer(); return false;">✕</a>
+        </div>
+        <div id="fwdViewerMessages" class="fwd-viewer-messages"></div>
+    </div>
+</div>
+
+<div id="ovk-msg-data"
+     data-corr-id="{$correspondent->getId()}"
+     data-csrf="{$csrfToken}"
+     data-self-url="{$thisUser->getURL()}"
+     data-self-ava="{$thisUser->getAvatarUrl()}"
+     data-self-name="{$thisUser->getFirstName()}"
+     style="display:none;"></div>
+
+{syntax off}
 <style>
-#msgAttachmentMenu {
-    position: absolute;
-    right: 0;
-    bottom: 100%;
-    z-index: 100;
-    background: #fff;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    min-width: 120px;
-    display: flex;
-    flex-direction: column;
-    padding: 4px 0;
-}
-#msgAttachmentMenu > a {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 4px 10px;
-    cursor: pointer;
-    white-space: nowrap;
-}
-#msgAttachmentMenu > a:hover {
-    background: #f0f0f0;
-}
-#msgAttachmentMenu > a > img {
-    width: 16px;
-    height: 16px;
-}
-#msgAttachmentMenu.hidden {
-    display: none !important;
-}
-.msg-attach-wrapper {
-    position: relative;
-    display: inline-block;
-}
-form#msgForm {
-    width: 100%;
-    display: flex;
-    flex-direction: column;
-}
-.messenger-app--input {
-    height: auto !important;
-    min-height: 80px;
-}
-.messenger-app--input---messagebox {
-    overflow: visible !important;
-    position: relative;
-}
-.messenger-app--input .post-buttons {
-    width: 100%;
-}
-.messenger-app--input .post-horizontal {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-    width: 100%;
-    box-sizing: border-box;
-}
-.messenger-app--input .post-horizontal > a {
-    max-width: 80px;
-    max-height: 80px;
-    overflow: hidden;
-    display: inline-block;
-    margin: 2px;
-}
-.messenger-app--input .post-horizontal > a img {
-    max-width: 80px;
-    max-height: 80px;
-    object-fit: cover;
-}
-.messenger-app--input .post-vertical {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    width: 100%;
-}
-.messenger-app--input .post-vertical > .vertical-attachment {
-    width: 100%;
-    box-sizing: border-box;
-}
-.msg-attach-j-photo {
-    max-width: 300px;
-    margin-top: 4px;
-}
-.msg-attach-j-audio {
-    width: 100%;
-    box-sizing: border-box;
-}
-.msg-attach-j-audio .audioEmbed {
-    max-width: 100% !important;
-    width: 100% !important;
-    box-sizing: border-box !important;
-}
-.msg-attach-j-audio > div > .audioEmbed {
-    max-width: 100% !important;
-    width: 100% !important;
-}
-.msg-attach-j-audio .audioEmbed.ctx_place {
-    max-width: 100% !important;
-}
-.messenger-app--messages---message ._content .attachments > .msg-attach-j * {
-    max-width: 100%;
-}
-.messenger-app--messages---message ._content .attachments > .msg-attach-j .audioEmbed {
-    max-width: 100% !important;
-    width: 100% !important;
-}
-.msg-attach-j-doc .docMainItem.docListViewItem {
-    width: 100% !important;
-    box-sizing: border-box;
-    align-items: center;
-}
-.msg-attach-j-doc .doc_content {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden !important;
-}
-.msg-attach-j-doc .docListViewItem {
-    min-height: 30px;
-    border-bottom: unset;
-    width: 100%;
-    box-sizing: border-box;
-    display: grid !important;
-    grid-template-columns: 0fr 1fr auto !important;
-    gap: 10px !important;
-    padding: 4px 7px !important;
-}
-.msg-attach-j-doc .doc_volume {
-    display: flex !important;
-    align-items: center !important;
-    gap: 5px !important;
-    visibility: hidden !important;
-}
-.msg-attach-j-doc .docListViewItem:hover .doc_volume {
-    visibility: visible !important;
-}
-.msg-attach-j-doc .docGalleryItem {
-    display: block;
-    min-width: 170px;
-    min-height: 170px;
-    width: 100% !important;
-    max-width: 100% !important;
-    height: 200px !important;
-    margin-bottom: 4px;
-    position: relative;
-    overflow: hidden !important;
-}
-.msg-attach-j-doc .docGalleryItem.embeddable.playing {
-    height: auto !important;
-    overflow: visible !important;
-}
-.msg-attach-j-doc .docGalleryItem .play-button {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-}
+#msgAttachmentMenu{position:absolute;right:0;bottom:100%;z-index:100;background:#fff;border:1px solid #ccc;min-width:120px;display:flex;flex-direction:column;padding:4px 0;}
+#msgAttachmentMenu>a{display:flex;align-items:center;gap:6px;padding:4px 10px;cursor:pointer;white-space:nowrap;}
+#msgAttachmentMenu>a:hover{background:#f0f0f0;}
+#msgAttachmentMenu>a>img{width:16px;height:16px;}
+#msgAttachmentMenu.hidden{display:none!important;}
+.msg-attach-wrapper{position:relative;display:inline-block;}
+form#msgForm{width:100%;display:flex;flex-direction:column;}
+.messenger-app--input{height:auto!important;min-height:80px;}
+.messenger-app--input---messagebox{overflow:visible!important;position:relative;}
+.messenger-app--input .post-buttons{width:100%;}
+.messenger-app--input .post-horizontal{display:flex;flex-wrap:wrap;gap:4px;width:100%;box-sizing:border-box;}
+.messenger-app--input .post-horizontal>a{max-width:80px;max-height:80px;overflow:hidden;display:inline-block;margin:2px;}
+.messenger-app--input .post-horizontal>a img{max-width:80px;max-height:80px;object-fit:cover;}
+.messenger-app--input .post-vertical{display:flex;flex-direction:column;gap:4px;width:100%;}
+.messenger-app--input .post-vertical>.vertical-attachment{width:100%;box-sizing:border-box;}
+.msg-attach-j-photo{max-width:300px;margin-top:4px;}
+.msg-attach-j-audio{width:100%;box-sizing:border-box;}
+.msg-attach-j-audio .audioEmbed,.msg-attach-j-audio>div>.audioEmbed,.msg-attach-j-audio .audioEmbed.ctx_place{max-width:100%!important;width:100%!important;box-sizing:border-box!important;}
+.messenger-app--messages---message ._content .attachments>.msg-attach-j *{max-width:100%;}
+.messenger-app--messages---message ._content .attachments>.msg-attach-j .audioEmbed{max-width:100%!important;width:100%!important;}
+.msg-attach-j-doc .docMainItem.docListViewItem{width:100%!important;box-sizing:border-box;align-items:center;}
+.msg-attach-j-doc .doc_content{flex:1;min-width:0;overflow:hidden!important;}
+.msg-attach-j-doc .docListViewItem{min-height:30px;border-bottom:unset;width:100%;box-sizing:border-box;display:grid!important;grid-template-columns:0fr 1fr auto!important;gap:10px!important;padding:4px 7px!important;}
+.msg-attach-j-doc .doc_volume{display:flex!important;align-items:center!important;gap:5px!important;visibility:hidden!important;}
+.msg-attach-j-doc .docListViewItem:hover .doc_volume{visibility:visible!important;}
+.msg-attach-j-doc .docGalleryItem{display:block;min-width:170px;min-height:170px;width:100%!important;max-width:100%!important;height:200px!important;margin-bottom:4px;position:relative;overflow:hidden!important;}
+.msg-attach-j-doc .docGalleryItem.embeddable.playing{height:auto!important;overflow:visible!important;}
+.msg-attach-j-doc .docGalleryItem .play-button{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);}
+
+.msg-check{display:flex;align-items:center;justify-content:center;width:0;min-width:0;overflow:hidden;cursor:pointer;opacity:0;transition:opacity .15s, width .15s;margin-right:0;}
+.messenger-app--messages:hover .msg-check,
+.messenger-app--messages---message.msg-selected .msg-check{opacity:1;width:20px;min-width:20px;margin-right:4px;}
+.msg-select-cb{cursor:pointer;width:15px;height:15px;}
+.messenger-app--messages---message.msg-selected{background:rgba(85,122,186,.12)!important;}
+.msg-highlight{animation:msgHighlight 2s ease;}
+@keyframes msgHighlight{0%,100%{background:transparent}30%{background:rgba(255,220,0,.35)}}
+
+.msg-action-bar{display:flex;align-items:center;justify-content:space-between;padding:6px 12px;background:#eef3fa;border-bottom:1px solid #c9d8ed;font-size:13px;gap:8px;flex-shrink:0;}
+.msg-sel-count{font-weight:600;color:#4a76a8;}
+.msg-action-btns{display:flex;gap:6px;}
+.msg-action-btns .button{padding:3px 10px;font-size:12px;}
+.msg-action-btns .button:disabled{opacity:.5;cursor:not-allowed;}
+
+.msg-reply-block{display:flex;align-items:stretch;gap:0;cursor:pointer;margin-bottom:4px;overflow:hidden;max-width:280px;}
+.msg-reply-block:hover .msg-reply-body{background:#e8eef7;}
+.msg-reply-bar{width:3px;background:#4a76a8;flex-shrink:0;}
+.msg-reply-body{padding:3px 7px;background:#f0f4fb;font-size:12px;line-height:1.4;flex:1;min-width:0;}
+.msg-reply-author{color:#4a76a8;display:block;}
+.msg-reply-text{color:#666;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+
+.msg-fwd-block{margin-top:4px;font-size:12px;border-left:3px solid #8a9bb5;padding-left:7px;}
+.msg-fwd-inline{margin-top:5px;display:flex;flex-direction:column;gap:3px;}
+.msg-fwd-inline-item{display:flex;gap:0;}
+.msg-fwd-inline-bar{width:3px;background:#8a9bb5;flex-shrink:0;margin-right:7px;}
+.msg-fwd-inline-body{flex:1;min-width:0;}
+.msg-fwd-inline-header{display:flex;align-items:center;gap:5px;margin-bottom:2px;}
+.msg-fwd-inline-ava{width:16px;height:16px;border-radius:50%;object-fit:cover;flex-shrink:0;}
+.msg-fwd-inline-name{font-size:12px;font-weight:600;color:#4a76a8;text-decoration:none;}
+.msg-fwd-inline-name:hover{text-decoration:underline;}
+.msg-fwd-inline-time{font-size:11px;color:#aaa;}
+.msg-fwd-inline-text{font-size:13px;color:#333;word-break:break-word;}
+.msg-fwd-block a{color:#4a76a8;text-decoration:none;}
+.msg-fwd-block a:hover{text-decoration:underline;}
+.msg-fwd-icon{margin-right:4px;}
+
+.msg-pending-preview{display:flex;align-items:center;gap:0;margin-bottom:5px;overflow:hidden;background:#f0f4fb;font-size:12px;}
+.msg-pending-bar{width:3px;background:#4a76a8;align-self:stretch;flex-shrink:0;}
+.msg-pending-body{flex:1;padding:4px 8px;min-width:0;}
+.msg-pending-body strong{color:#4a76a8;margin-right:4px;}
+.msg-pending-body span{color:#555;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:inline-block;max-width:250px;vertical-align:bottom;}
+.msg-pending-fwd{padding:5px 8px;gap:6px;align-items:center;}
+.msg-pending-fwd span{color:#555;}
+.msg-pending-remove{margin:0 8px;color:#999;text-decoration:none;font-size:14px;flex-shrink:0;}
+.msg-pending-remove:hover{color:#c00;}
+
+.ovk-modal-overlay{position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;}
+.ovk-modal-box{background:#fff;box-shadow:0 4px 24px rgba(0,0,0,.25);display:flex;flex-direction:column;max-height:85vh;overflow:hidden;}
+.ovk-modal-header{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#4d4d4d;color:#fff!important;border-bottom:1px solid #333;font-weight:600;font-size:13px;flex-shrink:0;}
+.ovk-modal-header span{color:#fff!important;}
+.ovk-modal-close{color:#fff!important;text-decoration:none;font-size:18px;line-height:1;}
+.ovk-modal-close:hover{color:#ffd;}
+.fwd-modal-box{width:360px;}
+.fwd-search-wrap{padding:6px 10px;border-bottom:1px solid #eee;flex-shrink:0;}
+.fwd-search-wrap input{width:100%;box-sizing:border-box;padding:5px 8px;border:1px solid #ccc;font-size:13px;}
+.fwd-conv-list{overflow-y:auto;flex:1;}
+.fwd-loading{padding:16px;text-align:center;color:#888;font-size:13px;}
+.fwd-conv-item{display:flex;align-items:center;gap:10px;padding:8px 12px;cursor:pointer;border-bottom:1px solid #f3f3f3;}
+.fwd-conv-item:hover{background:#f5f8ff;}
+.fwd-conv-ava{width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0;}
+.fwd-conv-name{flex:1;font-size:13px;}
+.fwd-conv-arrow{color:#aaa;font-size:16px;}
+.fwd-viewer-box{width:420px;}
+.fwd-viewer-messages{overflow-y:auto;flex:1;padding:4px 0;}
+.fwd-viewer-msg{display:flex;gap:10px;padding:7px 12px;border-bottom:1px solid #f3f3f3;}
+.fwd-viewer-ava{width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0;margin-top:2px;}
+.fwd-viewer-body{flex:1;min-width:0;}
+.fwd-viewer-name{font-weight:600;font-size:13px;color:#4a76a8;text-decoration:none;}
+.fwd-viewer-name:hover{text-decoration:underline;}
+.fwd-viewer-time{font-size:11px;color:#aaa;margin-left:6px;}
+.fwd-viewer-text{font-size:13px;color:#333;margin-top:2px;word-break:break-word;}
 </style>
+{/syntax}
+
+{script "js/node_modules/knockout/build/output/knockout-latest.js"}
+
+{* ── PHP values for JS — Latte processes this block ── *}
 
 
-    {script "js/node_modules/knockout/build/output/knockout-latest.js"}
-    <script>
-        function MessengerViewModel(initialMessages = []) {
-            window.messages     = ko.observableArray(initialMessages);
-            this.messages       = window.messages;
-            this.messageContent = ko.observable("");
-            
-            this.sendMessage = model => {
-	        let content = model.messageContent();
-	        window.Msg.sendMessage(content);
-	        model.messageContent("");
-	    };
-            this.loadHistory = _ => {
-                window.Msg._loadHistory();
-            };
-            
-            this.onMessagesScroll   = (model, e) => {
-                if(e.target.scrollTop < 21)
-                    model.loadHistory();
-            };
-            this.onTextareaKeyPress = (model, e) => {
-                if(e.which === 13) {
-                    if(!e.metaKey && !e.shiftKey) {
-                        let ta = u("textarea[name=message]").nodes[0];
-                        ta.blur();
-                        model.sendMessage(model);
-                        ta.focus();
-                        
-                        return false;
-                    }
-                }
-                
-                return true;
-            };
-        }
-        
-        class Messenger {
-            constructor(messages = []) {
-                this.ko     = ko.applyBindings(new MessengerViewModel(messages));
-                this.appEl  = document.querySelector(".messenger-app--messages");
-                this.offset = 0;
-                
-                this._loadHistory();
-                this._setupListener();
-                this.appEl.scrollTop = this.appEl.scrollHeight;
-            }
-            
-            _loadHistory() {
-                let xhr = new XMLHttpRequest();
-                xhr.open("GET", "/im/api/messages" + {$correspondent->getId()} + `/${ this.offset }.json`, false);
-                xhr.send();
-                
-                let messages    = JSON.parse(xhr.responseText);
-                let lastMessage = messages[messages.length - 1];
-                if(typeof lastMessage !== "undefined") this.offset = lastMessage.uuid;
-                
-                this.prependMessages(messages);
-            }
-            
-            _setupListener() {
-                let listenLongpool = () => {
-                    let xhr = new XMLHttpRequest();
-                    xhr.open("GET", "/im12", true);
-                    xhr.onload = () => {
-                        let data = JSON.parse(xhr.responseText);
-                        data.forEach(event => {
-                            event = event.event;
-                            if(event.type !== "newMessage")
-                                return;
-                            else if(event.message.sender.id !== {$correspondent->getId()})
-                                return;
-                            else if(this.offset >= event.message.uuid)
-                                return void(console.warn("Gay message recieved, skipping. [-WHeterosexual]"));
-                            
-                            this.addMessage(event.message);
-                            this.offset = event.message.uuid;
-                        });
-                        
-                        listenLongpool();
-                    };
-                    xhr.send();
-                };
-                
-                listenLongpool();
-            }
-            
-            appendMessages(messages) {
-                messages.forEach(m => window.messages.push(m));
-            }
-            
-            prependMessages(messages) {
-                messages.forEach(m => window.messages.unshift(m));
-            }
-            
-            addMessage(message, scroll = true) {
-                this.appendMessages([message]);
-                
-                if(scroll) {
-                    this.appEl.scrollTop = this.appEl.scrollHeight;
-                }
-            }
-            
-            _patchMessage(tempId, message) {
-                for(let i = window.messages().length - 1; i > -1; i--) {
-                    let msg = window.messages()[i];
-                    if(typeof msg._tuid === "undefined")
-                        return;
-                    else if(msg._tuid !== tempId)
-                        return;
-                    
-                    window.messages.valueWillMutate();
-                    window.messages()[i] = message;
-                    window.messages.valueHasMutated();
-                }
-            }
-            
-            _newSelfMessage(content = "...") {
-                return {
-                    "sender": {
-                        "link": {$thisUser->getURL()},
-                        "avatar": {$thisUser->getAvatarUrl()},
-                        "name": {$thisUser->getFirstName()}
-                    },
-                    "timing": {
-                        "sent": window.API.Service.getTime(),
-                        "edited": null
-                    },
-                    "text": content,
-                    "read": false,
-                    "attachments": [],
-                    "_tuid": Math.ceil(performance.now())
-                };
-            }
-            
-            _newReplyMessage(content = "...") {
-                return {
-                    "sender": {
-                        "link": {$correspondent->getURL()},
-                        "avatar": {$correspondent->getAvatarUrl()},
-                        "name": {$correspondent->getFirstName()}
-                    },
-                    "timing": {
-                        "sent": window.API.Service.getTime(),
-                        "edited": null
-                    },
-                    "text": content,
-                    "read": true,
-                    "_tuid": Math.ceil(performance.now())
-                };
-            }
-            
-            newMessage(content) {
-                let msg = this._newSelfMessage(content);
-                msg.timing.sent = "<img src=\"/assets/packages/static/openvk/img/loading_mini.gif\">";
-                this.addMessage(msg);
-                
-                return msg._tuid;
-            }
-            
-            newReply(content) {
-                let msg = this._newReplyMessage(content);
-                this.addMessage(msg);
-                
-                return msg._tuid;
-            }
-            
-            newReplies(replies) {
-                replies.forEach(this.newReply);
-            }
-            
-            sendMessage(content) {
-		console.debug("New outcoming message. Pushing preview to local stack.");
-		
-	        const postButtons = u('.messenger-app--input .post-buttons');
-		const allAttachments = collect_attachments(postButtons).join(',');
-		console.log('attachments at send time:', allAttachments);
-		    
-		if(content === "" && allAttachments === "") return false;
-		    
-		let tempId = this.newMessage(escapeHtml(content) || "📎");
-		    
-		let msgData = new FormData();
-		msgData.set("content", content);
-		msgData.set("hash", {$csrfToken});
-		if (allAttachments !== "") {
-		    msgData.set("attachments", allAttachments);
-		}
-                
-                let that = this;
-                let xhr  = new XMLHttpRequest();
-                xhr.open("POST", "/im/api/messages" + {$correspondent->getId()} + "/create.json", true);
-                xhr.onreadystatechange = (function() {
-                    if(this.readyState !== 4)
-                        return;
-                    else if(this.status !== 202) {
-                        console.error("Message was not sent.");
-                        that._patchMessage(tempId, {
-                            sender: {
-                                avatar: "/assets/packages/static/openvk/img/oof.apng",
-                                id: -1,
-                                link: "/support/manpages/messages/not-delivered.html",
-                                name: tr("messages_error_1")
-                            },
-                            text: tr("messages_error_1_description"),
-                            timing: {
-                                edited: null,
-                                sent: "???"
-                            },
-                            uuid: -4096
-                        });
-                        
-                        return;
-                    }
-                    
-                    console.debug("Message sent, updating view.");
-                    that._patchMessage(tempId, JSON.parse(xhr.responseText));
-		    u('.messenger-app--input .post-horizontal').html('');
-	            u('.messenger-app--input .post-vertical').html('');
-                });
-                xhr.send(msgData);
-                console.debug("Message sent, awaiting response.");
-            }
-        }
+{* ── Main JS — syntax off so Latte ignores {}, ${} etc. ── *}
+{syntax off}
+<script>
 
-	u(document).on('click', '.msg-attach-toggler', (e) => {
-   	const menu = document.getElementById('msgAttachmentMenu');
-        if(menu.classList.contains('hidden')) {
-            menu.classList.remove('hidden');
-            $(menu).css({ opacity: 0 }).fadeTo(250, 1);
-        } else {
-            $(menu).fadeTo(250, 0, function() {
-                this.classList.add('hidden');
-            });
-        }
+var _d             = document.getElementById('ovk-msg-data');
+var _OVK_CORR_ID   = parseInt(_d.dataset.corrId);
+var _OVK_CSRF      = _d.dataset.csrf;
+var _OVK_SELF_URL  = _d.dataset.selfUrl;
+var _OVK_SELF_AVA  = _d.dataset.selfAva;
+var _OVK_SELF_NAME = _d.dataset.selfName;
+var _OVK_CORR_SEL  = _OVK_CORR_ID;
+
+function wrapMessage(msg) {
+    if (!msg.selected)                   msg.selected  = ko.observable(false);
+    if (typeof msg.reply_to === 'undefined')  msg.reply_to  = null;
+    if (typeof msg.forwarded === 'undefined') msg.forwarded = [];
+    return msg;
+}
+
+function MessengerViewModel(initialMessages) {
+    initialMessages = initialMessages || [];
+    window.messages     = ko.observableArray(initialMessages.map(wrapMessage));
+    this.messages       = window.messages;
+    this.messageContent = ko.observable("");
+
+    this.selectedMessages = ko.computed(function() {
+        return window.messages().filter(function(m) {
+            return m.selected && m.selected();
+        });
     });
-	document.querySelector('textarea[name=message]').addEventListener('paste', async (e) => {
-	    const files = e.clipboardData?.files;
-	    if (!files || files.length === 0) return;
-	    
-	    const file = files[0];
-	    if (!file.type.startsWith('image/')) return;
-	    
-	    e.preventDefault();
-	    
-	    const postButtons = u('form#msgForm');
-	    await __uploadToTextarea(file, postButtons);
-	});
-        window.Msg = new Messenger([]);
-    </script>
+
+    var self = this;
+
+    this.onSelectionChange = function(msg, e) {
+	var count = self.selectedMessages().length;
+	var bar   = document.getElementById('msgActionBar');
+	var rBtn  = document.getElementById('msgReplyBtn');
+	bar.style.display = count > 0 ? 'flex' : 'none';
+	document.getElementById('msgSelCount').textContent = count + ' выбрано';
+	if (rBtn) rBtn.disabled = count !== 1;
+    };
+
+    this.cancelSelection = function() {
+        window.messages().forEach(function(m) { if (m.selected) m.selected(false); });
+        document.getElementById('msgActionBar').style.display = 'none';
+    };
+
+    this.replySelected = function() {
+        var sel = self.selectedMessages();
+        if (sel.length !== 1) return;
+        window.Msg.setPendingReply(sel[0]);
+        self.cancelSelection();
+    };
+
+    this.forwardSelected = function() {
+        var sel = self.selectedMessages();
+        if (!sel.length) return;
+        window.Msg._openForwardModal(sel.map(function(m) {
+            return { uuid: m.uuid, sender: m.sender, text: m.text, timing: m.timing };
+        }));
+        self.cancelSelection();
+    };
+
+    this.openForwardedViewer = function(fwd) {
+        window.Msg._showFwdViewer(fwd);
+        return false;
+    };
+
+
+	this.renderReplyTo = function(replyTo) {
+	    if (!replyTo) return '';
+	    var name = replyTo.sender ? replyTo.sender.name : '';
+	    var text = (replyTo.text || '').replace(/<[^>]+>/g, '').substring(0, 120);
+	    var uuid = replyTo.uuid || 0;
+	    return '<div class="msg-reply-block" onclick="window.Msg && window.Msg.scrollToUUID(' + uuid + ')">' +
+		'<div class="msg-reply-bar"></div>' +
+		'<div class="msg-reply-body">' +
+		'<strong class="msg-reply-author">' + name + '</strong>' +
+		'<span class="msg-reply-text">' + text + '</span>' +
+		'</div></div>';
+	};
+
+	this.renderFwdInline = function(forwarded) {
+	    if (!forwarded || !forwarded.length) return '';
+	    return '<div class="msg-fwd-inline">' +
+		forwarded.map(function(m) {
+		    var nested = (m.forwarded && m.forwarded.length)
+			? self.renderFwdInline(m.forwarded)
+			: '';
+		    return '<div class="msg-fwd-inline-item">' +
+			'<div class="msg-fwd-inline-bar"></div>' +
+			'<div class="msg-fwd-inline-body">' +
+			'<div class="msg-fwd-inline-header">' +
+			'<img src="' + (m.sender.avatar||'') + '" class="msg-fwd-inline-ava" />' +
+			'<a href="' + (m.sender.link||'#') + '" class="msg-fwd-inline-name">' + (m.sender.name||'') + '</a>' +
+			'<span class="msg-fwd-inline-time">' + (m.timing.sent||'') + '</span>' +
+			'</div>' +
+			'<div class="msg-fwd-inline-text">' + (m.text||'') + '</div>' +
+			nested +
+			'</div></div>';
+		}).join('') +
+		'</div>';
+	};
+
+    this.sendMessage = function(model) {
+        var content = model.messageContent();
+        window.Msg.sendMessage(content);
+        model.messageContent("");
+    };
+
+    this.loadHistory = function() { window.Msg._loadHistory(); };
+
+    this.onMessagesScroll = function(model, e) {
+        if (e.target.scrollTop < 21) model.loadHistory();
+    };
+
+    this.onTextareaKeyPress = function(model, e) {
+        if (e.which === 13 && !e.metaKey && !e.shiftKey) {
+            var ta = u("textarea[name=message]").nodes[0];
+            ta.blur();
+            model.sendMessage(model);
+            ta.focus();
+            return false;
+        }
+        return true;
+    };
+}
+
+window.msgVM = null;
+
+class Messenger {
+    constructor(messages) {
+        messages = messages || [];
+        window.msgVM  = new MessengerViewModel(messages);
+	this.ko	      = ko.applyBindings(window.msgVM, document.getElementById('messenger-ko-root'));
+        this.appEl    = document.querySelector(".messenger-app--messages");
+        this.offset   = 0;
+
+        this._pendingReply   = null;
+        this._pendingForward = null;
+        this._fwdConvAll     = [];
+
+        this._loadHistory();
+        this._setupListener();
+        this.appEl.scrollTop = this.appEl.scrollHeight;
+        this._handleFwdParam();
+    }
+
+    scrollToUUID(uuid) {
+	    var el = document.querySelector('.messenger-app--messages---message[data-uuid="' + uuid + '"]');
+	    if (!el) return;
+	    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+	    el.classList.add('msg-highlight');
+	    setTimeout(function() { el.classList.remove('msg-highlight'); }, 2000);
+	}
+
+    _handleFwdParam() {
+        var params = new URLSearchParams(window.location.search);
+        var fwdRaw = params.get('fwd');
+        if (!fwdRaw) return;
+        var ids = fwdRaw.split(',').filter(Boolean).map(Number).filter(function(n) { return n > 0; });
+        if (!ids.length) return;
+        this._pendingForward = ids.map(function(id) { return { uuid: id }; });
+        document.getElementById('msgFwdCount').textContent = 'Пересланных сообщений: ' + ids.length;
+        document.getElementById('msgFwdPreview').style.display = 'flex';
+        history.replaceState(null, '', window.location.pathname + '?sel=' + _OVK_CORR_SEL);
+    }
+
+    setPendingReply(msg) {
+        this._pendingReply = msg;
+        document.getElementById('replyAuthorName').textContent = msg.sender.name + ': ';
+        document.getElementById('replyTextPreview').textContent =
+            (msg.text || '').replace(/<[^>]+>/g, '').substring(0, 90);
+        document.getElementById('msgReplyPreview').style.display = 'flex';
+        u('textarea[name=message]').nodes[0].focus();
+    }
+
+    clearReply() {
+        this._pendingReply = null;
+        document.getElementById('msgReplyPreview').style.display = 'none';
+    }
+
+    clearForward() {
+        this._pendingForward = null;
+        document.getElementById('msgFwdPreview').style.display = 'none';
+    }
+
+    _openForwardModal(msgs) {
+        this._pendingForward = msgs;
+        var list = document.getElementById('fwdModalList');
+        list.innerHTML = '<div class="fwd-loading">Загрузка\u2026</div>';
+        document.getElementById('fwdModalSearch').value = '';
+        document.getElementById('msgForwardModal').style.display = 'flex';
+
+        var self = this;
+        fetch('/im/api/correspondences.json')
+            .then(function(r) { return r.json(); })
+            .then(function(convs) {
+                self._fwdConvAll = convs;
+                self._renderFwdConvList(convs);
+            })
+            .catch(function() {
+                list.innerHTML = '<div class="fwd-loading">Ошибка загрузки</div>';
+            });
+    }
+
+    _renderFwdConvList(convs) {
+        var list = document.getElementById('fwdModalList');
+        if (!convs.length) {
+            list.innerHTML = '<div class="fwd-loading">Нет диалогов</div>';
+            return;
+        }
+        list.innerHTML = '';
+        var self = this;
+        convs.forEach(function(c) {
+            var div = document.createElement('div');
+            div.className = 'fwd-conv-item';
+            div.innerHTML =
+                '<img src="' + c.avatar + '" class="fwd-conv-ava" alt="' + c.name + '" />' +
+                '<span class="fwd-conv-name">' + c.name + '</span>' +
+                '<span class="fwd-conv-arrow">\u203a</span>';
+            div.addEventListener('click', function() { self._selectFwdConv(c.id); });
+            list.appendChild(div);
+        });
+    }
+
+    _filterFwdConvList(q) {
+        var filtered = q
+            ? this._fwdConvAll.filter(function(c) {
+                return c.name.toLowerCase().indexOf(q.toLowerCase()) !== -1;
+              })
+            : this._fwdConvAll;
+        this._renderFwdConvList(filtered);
+    }
+
+    _selectFwdConv(userId) {
+        if (!this._pendingForward) return;
+        var ids = this._pendingForward.map(function(m) { return m.uuid; }).join(',');
+        this.closeForwardModal();
+        window.location.href = '/im?sel=' + userId + '&fwd=' + ids;
+    }
+
+    closeForwardModal() {
+        document.getElementById('msgForwardModal').style.display = 'none';
+    }
+
+    _showFwdViewer(messages) {
+        var container = document.getElementById('fwdViewerMessages');
+        container.innerHTML = '';
+        messages.forEach(function(m) {
+            var div = document.createElement('div');
+            div.className = 'fwd-viewer-msg';
+            div.innerHTML =
+                '<img src="' + m.sender.avatar + '" class="fwd-viewer-ava" />' +
+                '<div class="fwd-viewer-body">' +
+                '<a href="' + m.sender.link + '" class="fwd-viewer-name">' + m.sender.name + '</a>' +
+                '<span class="fwd-viewer-time">' + m.timing.sent + '</span>' +
+                '<div class="fwd-viewer-text">' + (m.text || '') + '</div>' +
+                '</div>';
+            container.appendChild(div);
+        });
+        document.getElementById('msgFwdViewer').style.display = 'flex';
+    }
+
+    closeFwdViewer() {
+        document.getElementById('msgFwdViewer').style.display = 'none';
+    }
+
+    _loadHistory() {
+        var xhr = new XMLHttpRequest();
+        xhr.open("GET", "/im/api/messages" + _OVK_CORR_ID + "/" + this.offset + ".json", false);
+        xhr.send();
+        var messages = JSON.parse(xhr.responseText);
+        var last     = messages[messages.length - 1];
+        if (typeof last !== "undefined") this.offset = last.uuid;
+        this.prependMessages(messages);
+    }
+
+    _setupListener() {
+        var self = this;
+        var listenLongpool = function() {
+            var xhr = new XMLHttpRequest();
+            xhr.open("GET", "/im12", true);
+            xhr.onload = function() {
+                var data = JSON.parse(xhr.responseText);
+                data.forEach(function(event) {
+                    event = event.event;
+                    if (event.type !== "newMessage") return;
+                    if (event.message.sender.id !== _OVK_CORR_ID) return;
+                    if (self.offset >= event.message.uuid) return;
+                    self.addMessage(event.message);
+                    self.offset = event.message.uuid;
+                });
+                listenLongpool();
+            };
+            xhr.send();
+        };
+        listenLongpool();
+    }
+
+    appendMessages(messages) {
+        messages.forEach(function(m) { window.messages.push(wrapMessage(m)); });
+    }
+
+    prependMessages(messages) {
+        messages.forEach(function(m) { window.messages.unshift(wrapMessage(m)); });
+    }
+
+    addMessage(message, scroll) {
+        if (scroll === undefined) scroll = true;
+        this.appendMessages([message]);
+        if (scroll) this.appEl.scrollTop = this.appEl.scrollHeight;
+    }
+
+    _patchMessage(tempId, message) {
+        for (var i = window.messages().length - 1; i > -1; i--) {
+            var msg = window.messages()[i];
+            if (typeof msg._tuid === "undefined") continue;
+            if (msg._tuid !== tempId) continue;
+            window.messages.valueWillMutate();
+            window.messages()[i] = wrapMessage(message);
+            window.messages.valueHasMutated();
+            return;
+        }
+    }
+
+	_newSelfMessage(content) {
+	    content = content || "...";
+	    return {
+		uuid:        0,
+		sender: {
+		    link:   _OVK_SELF_URL,
+		    avatar: _OVK_SELF_AVA,
+		    name:   _OVK_SELF_NAME,
+		},
+		timing:      { sent: window.API.Service.getTime(), edited: null },
+		text:        content,
+		read:        false,
+		attachments: [],
+		reply_to:    null,
+		forwarded:   [],
+		_tuid:       Math.ceil(performance.now()),
+	    };
+	}
+
+    newMessage(content) {
+        var msg = this._newSelfMessage(content);
+        msg.timing.sent = '<img src="/assets/packages/static/openvk/img/loading_mini.gif">';
+        this.addMessage(msg);
+        return msg._tuid;
+    }
+
+    sendMessage(content) {
+        var postButtons    = u('.messenger-app--input .post-buttons');
+        var allAttachments = collect_attachments(postButtons).join(',');
+        var replyTo        = this._pendingReply   ? this._pendingReply.uuid   : null;
+        var fwdIds         = (this._pendingForward && this._pendingForward.length)
+                               ? this._pendingForward.map(function(m) { return m.uuid; }).join(',')
+                               : null;
+
+        if (content === "" && allAttachments === "" && !replyTo && !fwdIds) return false;
+
+        var tempId = this.newMessage(escapeHtml(content) || "\uD83D\uDCCE");
+
+        var msgData = new FormData();
+        msgData.set("content", content);
+        msgData.set("hash",    _OVK_CSRF);
+        if (allAttachments !== "") msgData.set("attachments",   allAttachments);
+        if (replyTo)               msgData.set("reply_to",      replyTo);
+        if (fwdIds)                msgData.set("forwarded_ids", fwdIds);
+
+        this.clearReply();
+        this.clearForward();
+
+        var that = this;
+        var xhr  = new XMLHttpRequest();
+        xhr.open("POST", "/im/api/messages" + _OVK_CORR_ID + "/create.json", true);
+        xhr.onreadystatechange = function() {
+            if (this.readyState !== 4) return;
+            if (this.status !== 202) {
+                that._patchMessage(tempId, {
+                    sender:      { avatar: "/assets/packages/static/openvk/img/oof.apng", id: -1, link: "#", name: tr("messages_error_1") },
+                    text:        tr("messages_error_1_description"),
+                    timing:      { edited: null, sent: "???" },
+                    uuid:        -4096,
+                    reply_to:    null,
+                    forwarded:   [],
+                });
+                return;
+            }
+            that._patchMessage(tempId, JSON.parse(xhr.responseText));
+	    if (window.msgVM) window.msgVM.messageContent("");
+            u('.messenger-app--input .post-horizontal').html('');
+            u('.messenger-app--input .post-vertical').html('');
+        };
+        xhr.send(msgData);
+    }
+}
+
+u(document).on('click', '.msg-attach-toggler', function(e) {
+    var menu = document.getElementById('msgAttachmentMenu');
+    if (menu.classList.contains('hidden')) {
+        menu.classList.remove('hidden');
+        $(menu).css({ opacity: 0 }).fadeTo(250, 1);
+    } else {
+        $(menu).fadeTo(250, 0, function() { this.classList.add('hidden'); });
+    }
+});
+
+document.querySelector('textarea[name=message]').addEventListener('paste', async function(e) {
+    var files = e.clipboardData && e.clipboardData.files;
+    if (!files || files.length === 0) return;
+    var file = files[0];
+    if (!file.type.startsWith('image/')) return;
+    e.preventDefault();
+    var postButtons = u('form#msgForm');
+    await __uploadToTextarea(file, postButtons);
+});
+
+window.Msg = new Messenger([]);
+</script>
+{/syntax}
+</div>
 {/block}
