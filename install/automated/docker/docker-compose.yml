@@ -61,6 +61,12 @@ services:
         read_only: true
         bind:
           create_host_path: false
+      - type: bind
+        source: ../../../Web/routes.yml
+        target: /opt/chandler/extensions/available/openvk/Web/routes.yml
+        read_only: false
+        bind:
+          create_host_path: false
     depends_on:
       mariadb-primary:
           condition: service_healthy

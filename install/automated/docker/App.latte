@@ -206,7 +206,7 @@ form#msgForm{width:100%;display:flex;flex-direction:column;}
 @keyframes msgHighlight{0%,100%{background:transparent}30%{background:rgba(255,220,0,.35)}}
 
 .msg-action-bar{display:flex;align-items:center;justify-content:space-between;padding:6px 12px;background:#eef3fa;border-bottom:1px solid #c9d8ed;font-size:13px;gap:8px;flex-shrink:0;}
-.msg-sel-count{font-weight:600;color:#4a76a8;}
+.msg-sel-count{font-weight:600;color:#4d4d4d;}
 .msg-action-btns{display:flex;gap:6px;}
 .msg-action-btns .button{padding:3px 10px;font-size:12px;}
 .msg-action-btns .button:disabled{opacity:.5;cursor:not-allowed;}
@@ -215,7 +215,7 @@ form#msgForm{width:100%;display:flex;flex-direction:column;}
 .msg-reply-block:hover .msg-reply-body{background:#e8eef7;}
 .msg-reply-bar{width:3px;background:#4a76a8;flex-shrink:0;}
 .msg-reply-body{padding:3px 7px;background:#f0f4fb;font-size:12px;line-height:1.4;flex:1;min-width:0;}
-.msg-reply-author{color:#4a76a8;display:block;}
+.msg-reply-author{color:#555;display:block;}
 .msg-reply-text{color:#666;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 
 .msg-fwd-block{margin-top:4px;font-size:12px;border-left:3px solid #8a9bb5;padding-left:7px;}
@@ -224,14 +224,17 @@ form#msgForm{width:100%;display:flex;flex-direction:column;}
 .msg-fwd-inline-bar{width:3px;background:#8a9bb5;flex-shrink:0;margin-right:7px;}
 .msg-fwd-inline-body{flex:1;min-width:0;}
 .msg-fwd-inline-header{display:flex;align-items:center;gap:5px;margin-bottom:2px;}
-.msg-fwd-inline-ava{width:16px;height:16px;border-radius:50%;object-fit:cover;flex-shrink:0;}
-.msg-fwd-inline-name{font-size:12px;font-weight:600;color:#4a76a8;text-decoration:none;}
+.msg-fwd-inline-ava{width:16px;height:16px;border-radius:0;object-fit:cover;flex-shrink:0;}
+.msg-fwd-inline-name{font-size:12px;font-weight:600;color:#555;text-decoration:none;white-space:nowrap;}
 .msg-fwd-inline-name:hover{text-decoration:underline;}
 .msg-fwd-inline-time{font-size:11px;color:#aaa;}
 .msg-fwd-inline-text{font-size:13px;color:#333;word-break:break-word;}
 .msg-fwd-block a{color:#4a76a8;text-decoration:none;}
 .msg-fwd-block a:hover{text-decoration:underline;}
 .msg-fwd-icon{margin-right:4px;}
+.msg-fwd-inline-msghdr{display:flex;align-items:center;gap:5px;margin-bottom:2px;}
+.msg-fwd-inline-msg{margin-bottom:5px;}
+.msg-fwd-inline-msg:last-child{margin-bottom:0;}
 
 .msg-pending-preview{display:flex;align-items:center;gap:0;margin-bottom:5px;overflow:hidden;background:#f0f4fb;font-size:12px;}
 .msg-pending-bar{width:3px;background:#4a76a8;align-self:stretch;flex-shrink:0;}
@@ -262,9 +265,16 @@ form#msgForm{width:100%;display:flex;flex-direction:column;}
 .fwd-viewer-box{width:420px;}
 .fwd-viewer-messages{overflow-y:auto;flex:1;padding:4px 0;}
 .fwd-viewer-msg{display:flex;gap:10px;padding:7px 12px;border-bottom:1px solid #f3f3f3;}
-.fwd-viewer-ava{width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0;margin-top:2px;}
+.fwd-viewer-ava{width:32px;height:32px;border-radius:0;object-fit:cover;flex-shrink:0;margin-top:2px;}
+.fwd-viewer-name{font-weight:600;font-size:13px;color:#555;text-decoration:none;}
+.fwd-viewer-fwd{margin-top:4px;}
+.fwd-viewer-fwd-item{display:flex;gap:0;margin-top:3px;}
+.fwd-viewer-fwd-bar{width:3px;background:#8a9bb5;flex-shrink:0;margin-right:7px;}
+.fwd-viewer-fwd-body{flex:1;min-width:0;}
+.fwd-viewer-fwd-name{font-size:12px;font-weight:600;color:#555;}
+.fwd-viewer-fwd-time{font-size:11px;color:#aaa;margin-left:4px;}
+.fwd-viewer-fwd-text{font-size:12px;color:#333;}
 .fwd-viewer-body{flex:1;min-width:0;}
-.fwd-viewer-name{font-weight:600;font-size:13px;color:#4a76a8;text-decoration:none;}
 .fwd-viewer-name:hover{text-decoration:underline;}
 .fwd-viewer-time{font-size:11px;color:#aaa;margin-left:6px;}
 .fwd-viewer-text{font-size:13px;color:#333;margin-top:2px;word-break:break-word;}
@@ -287,6 +297,8 @@ var _OVK_SELF_URL  = _d.dataset.selfUrl;
 var _OVK_SELF_AVA  = _d.dataset.selfAva;
 var _OVK_SELF_NAME = _d.dataset.selfName;
 var _OVK_CORR_SEL  = _OVK_CORR_ID;
+
+window._fwdDataMap = {};
 
 function wrapMessage(msg) {
     if (!msg.selected)                   msg.selected  = ko.observable(false);
@@ -360,25 +372,69 @@ function MessengerViewModel(initialMessages) {
 
 	this.renderFwdInline = function(forwarded) {
 	    if (!forwarded || !forwarded.length) return '';
+
+	    if (forwarded.length >= 20) {
+		var key = 'fwd_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+		window._fwdDataMap[key] = forwarded;
+		return '<div class="msg-fwd-block">' +
+		    '<a href="#" onclick="window.Msg._showFwdViewerByKey(\'' + key + '\'); return false;">' +
+		    '<span class="msg-fwd-icon">↩</span> Пересланные сообщения...</a></div>';
+	    }
+
+	    var renderAttachments = function(attachments) {
+		if (!attachments || !attachments.length) return '';
+		var h = '';
+		attachments.forEach(function(a) {
+		    if (a.type === 'photo' && a.photo) {
+			h += '<img src="' + (a.photo.tiny_url || a.photo.url || '') +
+			     '" style="max-width:200px;max-height:150px;display:block;margin-top:3px;" />';
+		    } else if ((a.type === 'audio' || a.type === 'video' || a.type === 'doc') && a.html) {
+			h += '<div style="margin-top:3px;max-width:100%;">' + a.html + '</div>';
+		    }
+		});
+		return h;
+	    };
+
+	    // группируем по conv_id — исходному диалогу
+	    var groups = [];
+	    forwarded.forEach(function(m) {
+		var cid = m.conv_id || ('noconv_' + (m.sender ? m.sender.name : ''));
+		var last = groups[groups.length - 1];
+		if (last && last.cid === cid) {
+		    last.msgs.push(m);
+		} else {
+		    groups.push({ cid: cid, sender: m.sender, msgs: [m] });
+		}
+	    });
+
+	    var renderOneMsgBody = function(m) {
+		var nested = (m.forwarded && m.forwarded.length)
+		    ? self.renderFwdInline(m.forwarded)
+		    : '';
+		return '<div class="msg-fwd-inline-msg">' +
+		    '<div class="msg-fwd-inline-msghdr">' +
+		    '<img src="' + (m.sender && m.sender.avatar || '') + '" class="msg-fwd-inline-ava" />' +
+		    '<span class="msg-fwd-inline-name">' + (m.sender && m.sender.name || '') + '</span>' +
+		    '<span class="msg-fwd-inline-time">' + (m.timing && m.timing.sent || '') + '</span>' +
+		    '</div>' +
+		    '<div class="msg-fwd-inline-text">' + (m.text || '') + '</div>' +
+		    renderAttachments(m.attachments) +
+		    nested +
+		    '</div>';
+	    };
+
 	    return '<div class="msg-fwd-inline">' +
-		forwarded.map(function(m) {
-		    var nested = (m.forwarded && m.forwarded.length)
-			? self.renderFwdInline(m.forwarded)
-			: '';
+		groups.map(function(g) {
 		    return '<div class="msg-fwd-inline-item">' +
 			'<div class="msg-fwd-inline-bar"></div>' +
 			'<div class="msg-fwd-inline-body">' +
-			'<div class="msg-fwd-inline-header">' +
-			'<img src="' + (m.sender.avatar||'') + '" class="msg-fwd-inline-ava" />' +
-			'<a href="' + (m.sender.link||'#') + '" class="msg-fwd-inline-name">' + (m.sender.name||'') + '</a>' +
-			'<span class="msg-fwd-inline-time">' + (m.timing.sent||'') + '</span>' +
-			'</div>' +
-			'<div class="msg-fwd-inline-text">' + (m.text||'') + '</div>' +
-			nested +
+			g.msgs.map(renderOneMsgBody).join('') +
 			'</div></div>';
 		}).join('') +
 		'</div>';
 	};
+
+
 
     this.sendMessage = function(model) {
         var content = model.messageContent();
@@ -430,6 +486,11 @@ class Messenger {
 	    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
 	    el.classList.add('msg-highlight');
 	    setTimeout(function() { el.classList.remove('msg-highlight'); }, 2000);
+	}
+
+	_showFwdViewerByKey(key) {
+	    var msgs = window._fwdDataMap[key];
+	    if (msgs) this._showFwdViewer(msgs);
 	}
 
     _handleFwdParam() {
@@ -523,22 +584,78 @@ class Messenger {
     }
 
     _showFwdViewer(messages) {
-        var container = document.getElementById('fwdViewerMessages');
-        container.innerHTML = '';
-        messages.forEach(function(m) {
-            var div = document.createElement('div');
-            div.className = 'fwd-viewer-msg';
-            div.innerHTML =
-                '<img src="' + m.sender.avatar + '" class="fwd-viewer-ava" />' +
-                '<div class="fwd-viewer-body">' +
-                '<a href="' + m.sender.link + '" class="fwd-viewer-name">' + m.sender.name + '</a>' +
-                '<span class="fwd-viewer-time">' + m.timing.sent + '</span>' +
-                '<div class="fwd-viewer-text">' + (m.text || '') + '</div>' +
-                '</div>';
-            container.appendChild(div);
-        });
-        document.getElementById('msgFwdViewer').style.display = 'flex';
-    }
+	    var container = document.getElementById('fwdViewerMessages');
+	    container.innerHTML = '';
+
+	    var buildFwdHtml = function(fwdList, depth) {
+		if (!fwdList || !fwdList.length) return '';
+		var indent = '';
+		for (var i = 0; i < depth; i++) {
+		    indent += '<div class="fwd-viewer-fwd-bar"></div>';
+		}
+		return fwdList.map(function(m) {
+		    var nested = (m.forwarded && m.forwarded.length)
+			? '<div class="fwd-viewer-fwd">' + buildFwdHtml(m.forwarded, depth + 1) + '</div>'
+			: '';
+
+		    // attachments
+		    var attHtml = '';
+		    if (m.attachments && m.attachments.length) {
+			m.attachments.forEach(function(a) {
+			    if (a.type === 'photo' && a.photo) {
+				attHtml += '<img src="' + (a.photo.tiny_url || a.photo.url || '') + '" style="max-width:200px;max-height:150px;display:block;margin-top:3px;" />';
+			    } else if ((a.type === 'audio' || a.type === 'video' || a.type === 'doc') && a.html) {
+				attHtml += '<div style="margin-top:3px;">' + a.html + '</div>';
+			    }
+			});
+		    }
+
+		    return '<div class="fwd-viewer-fwd-item">' +
+			indent +
+			'<div class="fwd-viewer-fwd-bar"></div>' +
+			'<div class="fwd-viewer-fwd-body">' +
+			'<span class="fwd-viewer-fwd-name">' + (m.sender ? m.sender.name : '') + '</span>' +
+			'<span class="fwd-viewer-fwd-time">' + (m.timing ? m.timing.sent : '') + '</span>' +
+			'<div class="fwd-viewer-fwd-text">' + (m.text || '') + '</div>' +
+			attHtml +
+			nested +
+			'</div></div>';
+		}).join('');
+	    };
+
+	    messages.forEach(function(m) {
+		var div = document.createElement('div');
+		div.className = 'fwd-viewer-msg';
+
+		var attHtml = '';
+		if (m.attachments && m.attachments.length) {
+		    m.attachments.forEach(function(a) {
+			if (a.type === 'photo' && a.photo) {
+			    attHtml += '<img src="' + (a.photo.tiny_url || a.photo.url || '') + '" style="max-width:200px;max-height:150px;display:block;margin-top:3px;" />';
+			} else if ((a.type === 'audio' || a.type === 'video' || a.type === 'doc') && a.html) {
+			    attHtml += '<div style="margin-top:3px;">' + a.html + '</div>';
+			}
+		    });
+		}
+
+		var nestedHtml = (m.forwarded && m.forwarded.length)
+		    ? '<div class="fwd-viewer-fwd">' + buildFwdHtml(m.forwarded, 0) + '</div>'
+		    : '';
+
+		div.innerHTML =
+		    '<img src="' + (m.sender ? m.sender.avatar : '') + '" class="fwd-viewer-ava" />' +
+		    '<div class="fwd-viewer-body">' +
+		    '<a href="' + (m.sender ? m.sender.link : '#') + '" class="fwd-viewer-name">' + (m.sender ? m.sender.name : '') + '</a>' +
+		    '<span class="fwd-viewer-time">' + (m.timing ? m.timing.sent : '') + '</span>' +
+		    '<div class="fwd-viewer-text">' + (m.text || '') + '</div>' +
+		    attHtml +
+		    nestedHtml +
+		    '</div>';
+		container.appendChild(div);
+	    });
+
+	    document.getElementById('msgFwdViewer').style.display = 'flex';
+	}
 
     closeFwdViewer() {
         document.getElementById('msgFwdViewer').style.display = 'none';

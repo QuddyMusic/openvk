@@ -107,39 +107,50 @@ class Message extends RowModel
     }
 
     private function _simplifyForwarded(): array
-    {
-        $raw = $this->getRecord()->forwarded_ids;
-        if (!$raw) return [];
+	{
+	    $raw = $this->getRecord()->forwarded_ids;
+	    if (!$raw) return [];
 
-        $ids = json_decode($raw, true);
-        if (!is_array($ids)) return [];
+	    $ids = json_decode($raw, true);
+	    if (!is_array($ids)) return [];
 
-        $db     = DatabaseConnection::i()->getContext();
-        $result = [];
+	    $db     = DatabaseConnection::i()->getContext();
+	    $result = [];
 
-        foreach (array_slice($ids, 0, 20) as $fid) {
-            $fRow = $db->table('messages')->where('id', (int)$fid)->fetch();
-            if (!$fRow) continue;
+	    foreach (array_slice($ids, 0, 20) as $fid) {
+		$fRow = $db->table('messages')->where('id', (int)$fid)->fetch();
+		if (!$fRow) continue;
 
-            $fMsg    = new Message($fRow);
-            $fSender = $fMsg->getSender();
-            if (!$fSender) continue;
+		$fMsg    = new Message($fRow);
+		$fSender = $fMsg->getSender();
+		if (!$fSender) continue;
 
-            $result[] = [
-		    "uuid"      => $fMsg->getId(),
-		    "sender"    => [
+		// conv_id — отсортированная пара sender_id:recipient_id
+		// идентифицирует исходный диалог
+		$ids_pair = [(int)$fRow->sender_id, (int)$fRow->recipient_id];
+		sort($ids_pair);
+		$convId = $ids_pair[0] . '_' . $ids_pair[1];
+
+		// используем simplify() чтобы получить вложения
+		$simplified = $fMsg->simplify();
+
+		$result[] = [
+		    "uuid"        => $fMsg->getId(),
+		    "conv_id"     => $convId,
+		    "sender"      => [
 			"name"   => $fSender->getFirstName(),
 			"avatar" => $fSender->getAvatarUrl(),
 			"link"   => $_SERVER['REQUEST_SCHEME'] . "://" . $_SERVER['HTTP_HOST'] . $fSender->getURL(),
 		    ],
-		    "text"      => $fMsg->getText(),
-		    "timing"    => ["sent" => (string) $fMsg->getSendTimeHumanized()],
-		    "forwarded" => $fMsg->_simplifyForwarded(),
+		    "text"        => $fMsg->getText(),
+		    "timing"      => ["sent" => (string) $fMsg->getSendTimeHumanized()],
+		    "attachments" => $simplified['attachments'],
+		    "forwarded"   => $fMsg->_simplifyForwarded(),
 		];
-        }
+	    }
 
-        return $result;
-    }
+	    return $result;
+	}
 
     // ─── simplify ─────────────────────────────────────────────────────────────
 
