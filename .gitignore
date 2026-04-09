@@ -27,3 +27,8 @@ install/automated/docker/sqls/
 install/automated/docker/Session.dev.php
 install/automated/docker/chandler.yml
 install/automated/docker/openvk.yml
+install/automated/docker/chandler.dev.yml
+install/automated/docker/dev-session.ini
+install/automated/docker/docker-compose.dev.yml
+install/automated/docker/openvk.dev.yml
+install/automated/docker/Session.dev.php
