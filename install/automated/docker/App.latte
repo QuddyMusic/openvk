@@ -26,55 +26,59 @@
         </div>
     </div>
 
-	{* MESSAGES *}
-	    <div class="messenger-app--messages" data-bind="event: { scroll: onMessagesScroll }">
-		<div data-bind="foreach: messages">
-		    <div class="messenger-app--messages---message"
-			 data-bind="css: { unread: !read, 'msg-selected': selected },
-				    attr: { 'data-uuid': uuid }">
-			<div class="msg-check">
-			    <input type="checkbox" class="msg-select-cb"
-				   data-bind="checked: selected, event: { change: $root.onSelectionChange }, clickBubble: false" />
-			</div>
-			<img class="ava" data-bind="attr: { src: sender.avatar, alt: sender.name }" />
-			<div class="_content">
-			    <a href="#" data-bind="attr: { href: sender.link }">
-				<strong data-bind="text: sender.name"></strong>
-			    </a>
-			    <div data-bind="html: $root.renderReplyTo(reply_to)"></div>
-			    <span class="text" data-bind="html: text"></span>
-			    <div data-bind="html: $root.renderFwdInline(forwarded)"></div>
-			    <div data-bind="foreach: attachments" class="attachments">
-				<div class="msg-attach-j">
-				    <div data-bind="if: type === 'photo'" class="msg-attach-j-photo">
-					<a data-bind="attr: { href: link }, click: function(d,e){ OpenMiniature(e.originalEvent||e, photo.url, null, id, null); return false; }">
-					    <img data-bind="attr: { src: photo.tiny_url, alt: photo.caption }"
-						 style="max-width:100%;max-height:200px;object-fit:contain;display:block;" />
-					</a>
-				    </div>
-				    <div data-bind="if: type === 'audio'" class="msg-attach-j-audio" style="width:100%;">
-					<div data-bind="html: html"></div>
-				    </div>
-				    <div data-bind="if: type === 'video'" class="msg-attach-j-video" style="width:100%;">
-					<div data-bind="html: html"></div>
-				    </div>
-				    <div data-bind="if: type === 'doc'" class="msg-attach-j-doc" style="width:100%;">
-					<div data-bind="html: html"></div>
-				    </div>
-				</div>
-			    </div>
-			</div>
-			<div class="time" align="right">
-			    <span data-bind="html: timing.sent"></span>
-			</div>
-		    </div>
-		</div>
-	    </div>
+    {* MESSAGES *}
+    <div class="messenger-app--messages" data-bind="event: { scroll: onMessagesScroll }">
+        <div data-bind="foreach: messages">
+            <div class="messenger-app--messages---message"
+                 data-bind="css: { unread: !read, 'msg-selected': selected },
+                            attr: { 'data-uuid': uuid }">
+                <div class="msg-check">
+                    <input type="checkbox" class="msg-select-cb"
+                           data-bind="checked: selected, event: { change: $root.onSelectionChange }, clickBubble: false" />
+                </div>
+                <a class="msg-ava-link" data-bind="attr: { href: sender.link }">
+                    <img class="ava" data-bind="attr: { src: sender.avatar, alt: sender.name }" />
+                </a>
+                <div class="_content">
+                    <a class="msg-sender-link" data-bind="attr: { href: sender.link }">
+                        <strong data-bind="text: sender.name"></strong>
+                    </a>
+                    <div data-bind="html: $root.renderReplyTo(reply_to)"></div>
+                    <span class="text" data-bind="html: text"></span>
+                    <div data-bind="html: $root.renderFwdInline(forwarded)"></div>
+                    <div data-bind="foreach: attachments" class="attachments">
+                        <div class="msg-attach-j">
+                            <div data-bind="if: type === 'photo'" class="msg-attach-j-photo">
+                                <a data-bind="attr: { href: link }, click: function(d,e){ OpenMiniature(e.originalEvent||e, photo.url, null, id, null); return false; }">
+                                    <img data-bind="attr: { src: photo.tiny_url, alt: photo.caption }"
+                                         style="max-width:100%;max-height:200px;object-fit:contain;display:block;" />
+                                </a>
+                            </div>
+                            <div data-bind="if: type === 'audio'" class="msg-attach-j-audio" style="width:100%;">
+                                <div data-bind="html: html"></div>
+                            </div>
+                            <div data-bind="if: type === 'video'" class="msg-attach-j-video" style="width:100%;">
+                                <div data-bind="html: html"></div>
+                            </div>
+                            <div data-bind="if: type === 'doc'" class="msg-attach-j-doc" style="width:100%;">
+                                <div data-bind="html: html"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="time" align="right">
+                    <span data-bind="html: timing.sent"></span>
+                </div>
+            </div>
+        </div>
+    </div>
 
     {* INPUT *}
     <div class="messenger-app--input">
         {if $correspondent->getId() === $thisUser->getId() || $correspondent->getPrivacyPermission('messages.write', $thisUser)}
-            <img class="ava" src="{$thisUser->getAvatarUrl('miniscule')}" alt="{$thisUser->getCanonicalName()}" />
+	    <a href="{$thisUser->getURL()}">
+                <img class="ava" src="{$thisUser->getAvatarUrl('miniscule')}" alt="{$thisUser->getCanonicalName()}" />
+            </a>
             <div class="messenger-app--input---messagebox">
                 <div id="msgReplyPreview" class="msg-pending-preview" style="display:none;">
                     <div class="msg-pending-bar"></div>
@@ -121,7 +125,9 @@
                     </div>
                 </form>
             </div>
-            <img class="ava" src="{$correspondent->getAvatarUrl('miniscule')}" alt="{$correspondent->getCanonicalName()}" />
+	    <a href="{$correspondent->getURL()}">
+                <img class="ava" src="{$correspondent->getAvatarUrl('miniscule')}" alt="{$correspondent->getCanonicalName()}" />
+            </a>
         {else}
             <div class="blocked" data-localized-text="{_messages_blocked}"></div>
         {/if}
@@ -188,6 +194,7 @@ form#msgForm{width:100%;display:flex;flex-direction:column;}
 .msg-attach-j-audio .audioEmbed,.msg-attach-j-audio>div>.audioEmbed,.msg-attach-j-audio .audioEmbed.ctx_place{max-width:100%!important;width:100%!important;box-sizing:border-box!important;}
 .messenger-app--messages---message ._content .attachments>.msg-attach-j *{max-width:100%;}
 .messenger-app--messages---message ._content .attachments>.msg-attach-j .audioEmbed{max-width:100%!important;width:100%!important;}
+.messenger-app--messages---message ._content>a strong{color:#555!important;}
 .msg-attach-j-doc .docMainItem.docListViewItem{width:100%!important;box-sizing:border-box;align-items:center;}
 .msg-attach-j-doc .doc_content{flex:1;min-width:0;overflow:hidden!important;}
 .msg-attach-j-doc .docListViewItem{min-height:30px;border-bottom:unset;width:100%;box-sizing:border-box;display:grid!important;grid-template-columns:0fr 1fr auto!important;gap:10px!important;padding:4px 7px!important;}
@@ -197,9 +204,14 @@ form#msgForm{width:100%;display:flex;flex-direction:column;}
 .msg-attach-j-doc .docGalleryItem.embeddable.playing{height:auto!important;overflow:visible!important;}
 .msg-attach-j-doc .docGalleryItem .play-button{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);}
 
-.msg-check{display:flex;align-items:center;justify-content:center;width:0;min-width:0;overflow:hidden;cursor:pointer;opacity:0;transition:opacity .15s, width .15s;margin-right:0;}
+.messenger-app--messages---message{position:relative;}
+.msg-check{position:absolute;left:-20px;top:50%;transform:translateY(-50%);width:18px;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s;cursor:pointer;z-index:2;}
 .messenger-app--messages:hover .msg-check,
-.messenger-app--messages---message.msg-selected .msg-check{opacity:1;width:20px;min-width:20px;margin-right:4px;}
+.messenger-app--messages---message.msg-selected .msg-check{opacity:1;}
+.messenger-app--messages{padding-left:60px; padding-right:60px;}
+.msg-ava-link{display:inline-block;flex-shrink:0;}
+.msg-sender-link{display:inline-block;width:fit-content;}
+.msg-sender-link strong{color:#555!important;}
 .msg-select-cb{cursor:pointer;width:15px;height:15px;}
 .messenger-app--messages---message.msg-selected{background:rgba(85,122,186,.12)!important;}
 .msg-highlight{animation:msgHighlight 2s ease;}
@@ -810,6 +822,29 @@ document.querySelector('textarea[name=message]').addEventListener('paste', async
     e.preventDefault();
     var postButtons = u('form#msgForm');
     await __uploadToTextarea(file, postButtons);
+});
+
+u(document).on('click', '.messenger-app--messages---message', function(e) {
+    if (u(e.target).closest('.msg-check').length) return;
+    if (u(e.target).closest('.msg-ava-link').length) return;
+    if (u(e.target).closest('.msg-sender-link').length) return;
+    if (u(e.target).closest('a').length) return;
+    if (u(e.target).closest('.msg-reply-block').length) return;
+    if (u(e.target).closest('.msg-fwd-inline').length) return;
+
+    var el = u(e.target).closest('.messenger-app--messages---message').nodes[0];
+    if (!el) return;
+    var uuid = parseInt(el.getAttribute('data-uuid'));
+    if (!uuid || uuid <= 0) return;
+
+    var msgs = window.messages();
+    for (var i = 0; i < msgs.length; i++) {
+        if (msgs[i].uuid === uuid) {
+            msgs[i].selected(!msgs[i].selected());
+            window.msgVM.onSelectionChange(msgs[i], null);
+            break;
+        }
+    }
 });
 
 window.Msg = new Messenger([]);
