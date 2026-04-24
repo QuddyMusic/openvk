@@ -30,7 +30,7 @@
     <div class="messenger-app--messages" data-bind="event: { scroll: onMessagesScroll }">
         <div data-bind="foreach: messages">
             <div class="messenger-app--messages---message"
-                 data-bind="css: { unread: !read, 'msg-selected': selected },
+		 data-bind="css: { unread: !read(), 'msg-selected': selected },
                             attr: { 'data-uuid': uuid }">
                 <div class="msg-check">
                     <input type="checkbox" class="msg-select-cb"
@@ -313,11 +313,14 @@ var _OVK_CORR_SEL  = _OVK_CORR_ID;
 window._fwdDataMap = {};
 
 function wrapMessage(msg) {
-    if (!msg.selected)                   msg.selected  = ko.observable(false);
+    if (!msg.selected)                        msg.selected  = ko.observable(false);
+    if (!ko.isObservable(msg.read))
+	    msg.read = ko.observable(msg.read === true || msg.read === 1);
     if (typeof msg.reply_to === 'undefined')  msg.reply_to  = null;
     if (typeof msg.forwarded === 'undefined') msg.forwarded = [];
     return msg;
 }
+
 
 function MessengerViewModel(initialMessages) {
     initialMessages = initialMessages || [];
@@ -490,6 +493,21 @@ class Messenger {
         this._setupListener();
         this.appEl.scrollTop = this.appEl.scrollHeight;
         this._handleFwdParam();
+	this._markRead();
+
+	var self = this;
+	setInterval(function() {
+	    fetch('/im/api/messages' + _OVK_CORR_ID + '/read.json', {
+		method: 'POST',
+		body: (function(){ var f=new FormData(); f.set('hash',_OVK_CSRF); return f; })()
+	    }).then(function() {
+		window.messages().forEach(function(m) {
+		    if (m.sender && m.sender.id === _OVK_CORR_ID) {
+			if (ko.isObservable(m.read)) m.read(true);
+		    }
+		});
+	    });
+	}, 10000);
     }
 
     scrollToUUID(uuid) {
@@ -516,6 +534,23 @@ class Messenger {
         document.getElementById('msgFwdPreview').style.display = 'flex';
         history.replaceState(null, '', window.location.pathname + '?sel=' + _OVK_CORR_SEL);
     }
+
+    _markRead() {
+	    // 1. Немедленно обновить UI — не ждать сервера
+	    window.messages().forEach(function(m) {
+		if (m.sender && m.sender.id === _OVK_CORR_ID) {
+		    if (ko.isObservable(m.read)) m.read(true);
+		}
+	    });
+
+	    // 2. Обновить БД и уведомить собеседника через SignalManager
+	    var xhr = new XMLHttpRequest();
+	    xhr.open("POST", "/im/api/messages" + _OVK_CORR_ID + "/read.json", true);
+	    var fd = new FormData();
+	    fd.set("hash", _OVK_CSRF);
+	    xhr.send(fd);
+	}
+
 
     setPendingReply(msg) {
         this._pendingReply = msg;
@@ -684,26 +719,41 @@ class Messenger {
     }
 
     _setupListener() {
-        var self = this;
-        var listenLongpool = function() {
-            var xhr = new XMLHttpRequest();
-            xhr.open("GET", "/im12", true);
-            xhr.onload = function() {
-                var data = JSON.parse(xhr.responseText);
-                data.forEach(function(event) {
-                    event = event.event;
-                    if (event.type !== "newMessage") return;
-                    if (event.message.sender.id !== _OVK_CORR_ID) return;
-                    if (self.offset >= event.message.uuid) return;
-                    self.addMessage(event.message);
-                    self.offset = event.message.uuid;
-                });
-                listenLongpool();
-            };
-            xhr.send();
-        };
-        listenLongpool();
-    }
+	    var self = this;
+	    var listenLongpool = function() {
+		var xhr = new XMLHttpRequest();
+		xhr.open("GET", "/im12", true);
+		xhr.timeout = 35000;
+		xhr.onload = function() {
+		    try {
+			var data = JSON.parse(xhr.responseText);
+			data.forEach(function(item) {
+			    var event = item.event;
+			    if (!event) return;
+			    if (event.type === "newMessage") {
+				if (event.message.sender.id !== _OVK_CORR_ID) return;
+				if (self.offset >= event.message.uuid) return;
+				self.addMessage(event.message);
+				self._markRead();
+				self.offset = event.message.uuid;
+			    } else if (event.type === "messagesRead") {
+				if (event.reader_id === _OVK_CORR_ID) {
+				    window.messages().forEach(function(m) {
+					if (ko.isObservable(m.read)) m.read(true);
+				    });
+				}
+			    }
+			});
+		    } catch(e) {}
+		    listenLongpool();
+		};
+		xhr.onerror = xhr.ontimeout = function() {
+		    setTimeout(listenLongpool, 2000);
+		};
+		xhr.send();
+	    };
+	    listenLongpool();
+	}
 
     appendMessages(messages) {
         messages.forEach(function(m) { window.messages.push(wrapMessage(m)); });
@@ -735,14 +785,10 @@ class Messenger {
 	    content = content || "...";
 	    return {
 		uuid:        0,
-		sender: {
-		    link:   _OVK_SELF_URL,
-		    avatar: _OVK_SELF_AVA,
-		    name:   _OVK_SELF_NAME,
-		},
+		sender: { link: _OVK_SELF_URL, avatar: _OVK_SELF_AVA, name: _OVK_SELF_NAME },
 		timing:      { sent: window.API.Service.getTime(), edited: null },
 		text:        content,
-		read:        false,
+		read: ko.observable(false),
 		attachments: [],
 		reply_to:    null,
 		forwarded:   [],

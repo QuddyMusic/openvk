@@ -13,6 +13,8 @@ use openvk\Web\Models\Entities\User;
 use openvk\Web\Models\RowModel;
 use openvk\Web\Models\Repositories\Users;
 use Nette\Database\Table\ActiveRow;
+use RdKafka\{Conf as RDKConf, Producer};
+
 
 /**
  * A repository of messages sent between correspondents.
@@ -170,17 +172,41 @@ class Correspondence
         $message->setSender_Type($classes[0]);
         $message->setRecipient_Type($classes[1]);
         $message->setCreated(time());
-        $message->setUnread(1);
-        $message->save();
+	$message->setUnread(1);
+	$message->save();
+	DatabaseConnection::i()->getConnection()->query("UPDATE messages SET unread = 0 WHERE sender_id = " . $this->correspondents[1]->getId());
 
-        DatabaseConnection::i()->getConnection()->query("UPDATE messages SET unread = 0 WHERE sender_id = " . $this->correspondents[1]->getId());
+	if ($ids[0] !== $ids[1]) {
+	    $event = new NewMessageEvent($message);
+	    (SignalManager::i())->triggerEvent($event, $ids[1]);
 
-        # да
-        if ($ids[0] !== $ids[1]) {
-            $event = new NewMessageEvent($message);
-            (SignalManager::i())->triggerEvent($event, $ids[1]);
-        }
+	    $kafkaConf = OPENVK_ROOT_CONF["openvk"]["credentials"]["notificationsBroker"];
+	    if ($kafkaConf["enable"]) {
+		try {
+		    $brokerConf = new RDKConf();
+		    $brokerConf->set("metadata.broker.list", $kafkaConf["kafka"]["addr"] . ":" . $kafkaConf["kafka"]["port"]);
+		    $brokerConf->set("api.version.request", "true");
+		    $producer   = new Producer($brokerConf);
+		    $producer->addBrokers($kafkaConf["kafka"]["addr"] . ":" . $kafkaConf["kafka"]["port"]);
+		    $descriptor = implode(",", [
+			"openvk.Web.Models.Entities.Message",
+			$ids[1],
+			base64_encode(serialize((object) ["messageId" => $message->getId()])),
+		    ]);
+		    error_log("KAFKA SENT to user " . $ids[1] . " msgId=" . $message->getId());
+		    $topic = $producer->newTopic($kafkaConf["kafka"]["topic"]);
+		    $topic->produce(RD_KAFKA_PARTITION_UA, RD_KAFKA_MSG_F_BLOCK, $descriptor);
+		    $producer->flush(100);
+		} catch (\Throwable $e) {
+		    error_log("KAFKA ERROR: " . $e->getMessage());
+		}
+	    }
+	} else {
+	    $event = new NewMessageEvent($message);
+	    (SignalManager::i())->triggerEvent($event, $ids[0]);
+	}
 
-        return $message;
+	return $message;
+        
     }
 }

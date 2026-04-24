@@ -204,8 +204,40 @@ final class MessengerPresenter extends OpenVKPresenter
 	    $msg = new Message($msgRow);
         }
 
-        header("HTTP/1.1 202 Accepted");
-        header("Content-Type: application/json");
-        exit(json_encode($msg->simplify()));
+	$data = $msg->simplify();
+	header("HTTP/1.1 202 Accepted");
+	header("Content-Type: application/json");
+	exit(json_encode($data));
     }
+
+    public function renderApiMarkRead(int $sel): void
+	{
+	    $this->assertUserLoggedIn();
+	    header("Content-Type: application/json");
+
+	    $correspondent  = $this->getCorrespondent($sel);
+	    if (!$correspondent) {
+		header("HTTP/1.1 404 Not Found");
+		exit();
+	    }
+
+	    $correspondence = new Correspondence($this->user->identity, $correspondent);
+	    $correspondence->getMessages(1, null, null, null);
+
+	    // сигналим отправителю что его сообщения прочитаны
+	    $event = new \openvk\Web\Events\MessageReadEvent(
+		$this->user->id,
+		$sel
+	    );
+	    (SignalManager::i())->triggerEvent($event, $correspondent->getId());
+
+	    exit(json_encode(["ok" => true]));
+	}
+
+    public function renderApiUnreadCount(): void
+	{
+	    $this->assertUserLoggedIn();
+	    header("Content-Type: application/json");
+	    exit(json_encode(["count" => $this->user->identity->getUnreadMessagesCount()]));
+	}
 }

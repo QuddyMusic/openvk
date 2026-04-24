@@ -185,10 +185,10 @@
                             <a n:if="$thisUser->getLeftMenuItemStatus('videos')" href="/videos{$thisUser->getId()}" class="link">{_my_videos}</a>
                             <a n:if="$thisUser->getLeftMenuItemStatus('audios')" href="/audios{$thisUser->getId()}" class="link">{_my_audios}</a>
                             <a n:if="$thisUser->getLeftMenuItemStatus('messages')" href="/im" class="link">{_my_messages}
-                                <object type="internal/link" n:if="$thisUser->getUnreadMessagesCount() > 0">
-                                    (<b>{$thisUser->getUnreadMessagesCount()}</b>)
-                                </object>
-                            </a>
+				    <object type="internal/link" id="msg-sidebar-counter-obj" n:if="$thisUser->getUnreadMessagesCount() > 0">
+					(<b id="msg-sidebar-counter">{$thisUser->getUnreadMessagesCount()}</b>)
+				    </object>
+				</a>
                             <a n:if="$thisUser->getLeftMenuItemStatus('notes')" href="/notes{$thisUser->getId()}" class="link">{_my_notes}</a>
                             <a n:if="$thisUser->getLeftMenuItemStatus('groups')" href="/groups{$thisUser->getId()}" class="link">{_my_groups}</a>
                             <a n:if="$thisUser->getLeftMenuItemStatus('news')" href="/feed" class="link" title="{_my_feed} [Alt+Shift+,]" accesskey=",">{_my_feed}</a>
@@ -302,11 +302,11 @@
                                     <img src="/assets/packages/static/openvk/img/photos.svg">
                                 </a>
                                 <a id="minilink-messenger" class="minilink" href="/im">
-                                    <object type="internal/link" n:if="$thisUser->getUnreadMessagesCount() > 0">
-                                        <div class="counter">
-                                            +{$thisUser->getUnreadMessagesCount()}
-                                        </div>
-                                    </object>
+				    <object type="internal/link" id="msg-counter-obj" n:if="$thisUser->getUnreadMessagesCount() > 0">
+					<div class="counter" id="msg-counter">
+					    +{$thisUser->getUnreadMessagesCount()}
+					</div>
+				    </object>
                                     <img src="/assets/packages/static/openvk/img/messages.svg">
                                 </a>
                                 <a id="minilink-groups" class="minilink" href="/groups{$thisUser->getId()}">
@@ -436,7 +436,7 @@
 
         {ifset $thisUser}
             {script "js/al_notifs.js"}
-            {script "js/al_feed.js"}
+	            {script "js/al_feed.js"}
         {/ifset}
 
         {script "js/node_modules/leaflet/dist/leaflet.js"}
@@ -497,6 +497,121 @@
             {include bodyScripts}
         {/ifset}
         {script "js/router.js"}
+	<script>
+		(function() {
+			// перехватываем updateTitle из notifications.js
+			    var _origUpdateTitle = window.updateTitle;
+			    var _unreadMsg = 0;
+			    window.updateTitle = function() {
+				if (typeof _origUpdateTitle === 'function') _origUpdateTitle();
+				if (_unreadMsg > 0) {
+				    var base = window.baseTitle || document.title.replace(/^\(\d+\)\s*/, '');
+				    document.title = '(' + _unreadMsg + ') ' + base;
+				}
+			    };
+			function updateCounters(count) {
+			    _unreadMsgCount = count;
+			    // title — напрямую, не через counter из notifications.js
+			    var base = document.title.replace(/^\(\d+\)\s*/, '');
+			    document.title = count > 0 ? '(' + count + ') ' + base : base;
+			    // minilink
+			    var obj = document.getElementById('msg-counter-obj');
+			    var cnt = document.getElementById('msg-counter');
+			    if (count > 0) {
+				if (cnt) { cnt.textContent = '+' + count; }
+				else {
+				    var a = document.getElementById('minilink-messenger');
+				    if (a) {
+					var o = document.createElement('object');
+					o.type = 'internal/link';
+					o.id = 'msg-counter-obj';
+					o.innerHTML = '<div class="counter" id="msg-counter">+' + count + '</div>';
+					a.insertBefore(o, a.firstChild);
+				    }
+				}
+			    } else { if (obj) obj.remove(); }
+			    // sidebar
+			    var sideObj = document.getElementById('msg-sidebar-counter-obj');
+			    var sideCnt = document.getElementById('msg-sidebar-counter');
+			    if (count > 0) {
+				if (sideCnt) { sideCnt.textContent = count; }
+				else {
+				    var sideLink = document.querySelector('a[href="/im"].link');
+				    if (sideLink) {
+					var o2 = document.createElement('object');
+					o2.type = 'internal/link';
+					o2.id = 'msg-sidebar-counter-obj';
+					o2.innerHTML = '(<b id="msg-sidebar-counter">' + count + '</b>)';
+					sideLink.appendChild(o2);
+				    }
+				}
+			    } else { if (sideObj) sideObj.remove(); }
+			}
+
+			function fetchAndUpdate() {
+			    window._fetchMsgCount = fetchAndUpdate;
+			    fetch('/im/api/unread.json')
+				.then(function(r) { return r.json(); })
+				.then(function(d) {
+				    console.log('unread count:', d.count);
+				    updateCounters(d.count);
+				})
+				.catch(function(e){ console.error(e); });
+			}
+
+			function refreshDialogList() {
+			    fetch('/im')
+				.then(function(r) { return r.text(); })
+				.then(function(html) {
+				    var parser = new DOMParser();
+				    var doc = parser.parseFromString(html, 'text/html');
+				    var newList = doc.querySelector('.crp-list');
+				    var curList = document.querySelector('.crp-list');
+				    if (newList && curList) curList.innerHTML = newList.innerHTML;
+				}).catch(function(){});
+			}
+
+			function listenMessages() {
+			    var xhr = new XMLHttpRequest();
+			    xhr.open("GET", "/im" + Math.floor(Math.random() * 1000000), true);
+			    xhr.timeout = 35000;
+			    xhr.onload = function() {
+				try {
+				    var data = JSON.parse(xhr.responseText);
+				    data.forEach(function(item) {
+					var ev = item.event;
+					if (!ev || ev.type !== "newMessage") return;
+					var msg = ev.message;
+					// обновить счётчики с сервера
+					fetchAndUpdate();
+					// обновить список диалогов
+					if (window.location.pathname === '/im') refreshDialogList();
+					// уведомление если не в этом диалоге
+					var inDialog = window.location.search.indexOf('sel=' + (msg.sender ? msg.sender.id : '')) !== -1;
+					if (!inDialog && msg.sender) {
+					    var text = (msg.text || '').replace(/<[^>]+>/g, '').substring(0, 80) || '📎';
+					    NewNotification(msg.sender.name, text, msg.sender.avatar,
+						function() { window.location.href = '/im?sel=' + msg.sender.id; }, 6000);
+					    playNotifSound();
+					}
+				    });
+				} catch(e) {}
+				listenMessages();
+			    };
+			    xhr.onerror = xhr.ontimeout = function() { setTimeout(listenMessages, 3000); };
+			    xhr.send();
+			}
+
+			// инициализация
+			fetchAndUpdate();
+			listenMessages();
+			setInterval(fetchAndUpdate, 30000);
+			window.addEventListener('focus', function() {
+                            fetchAndUpdate();
+                        });
+		})();
+		</script>
+
     </body>
 </html>
 {/if}

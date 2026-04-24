@@ -53,31 +53,55 @@ class Notifications implements Handler
             $message = $consumer->consume(30 * 1000);
             switch ($message->err) {
                 case RD_KAFKA_RESP_ERR_NO_ERROR:
-                    $descriptor = $message->payload;
-                    [,$user,]   = explode(",", $descriptor);
-                    if (((int) $user) === $this->user->getId()) {
-                        $data         = (object) [];
-                        $notification = $this->notifs->fromDescriptor($descriptor, $data);
-                        if (!$notification) {
-                            $reject(1982, "Server Error");
-                            return;
-                        }
+		    $descriptor = $message->payload;
+		    [,$user,]   = explode(",", $descriptor);
+		    if (((int) $user) === $this->user->getId()) {
+			$parts = explode(",", $descriptor);
+			$class = $parts[0] ?? '';
 
-                        $tplDir = __DIR__ . "/../Web/Presenters/templates/components/notifications/";
-                        $tplId  = "$tplDir$data->actionCode/_$data->originModelType" . "_" . $data->targetModelType . "_.latte";
-                        $latte  = new TemplatingEngine();
-                        $latte->setTempDirectory(CHANDLER_ROOT . "/tmp/cache/templates");
-                        $latte->addExtension(new \Latte\Essential\TranslatorExtension(tr(...)));
-                        $resolve([
-                            "title"    => tr("notif_" . $data->actionCode . "_" . $data->originModelType . "_" . $data->targetModelType),
-                            "body"     => trim(preg_replace('%(\s){2,}%', "$1", $latte->renderToString($tplId, ["notification" => $notification]))),
-                            "ava"      => $notification->getModel(1)->getAvatarUrl(),
-                            "priority" => 1,
-                        ]);
-                        return;
-                    }
+			// Новое сообщение
+			if ($class === 'openvk.Web.Models.Entities.Message') {
+			    $data = unserialize(base64_decode($parts[2] ?? ''));
+			    $msgId = (int)($data->messageId ?? 0);
+			    if ($msgId) {
+				$msg    = (new \openvk\Web\Models\Repositories\Messages())->get($msgId);
+				$sender = $msg ? $msg->getSender() : null;
+				if ($msg && $sender) {
+				    $text = mb_substr(strip_tags($msg->getText()), 0, 100);
+				    $resolve([
+					"title"    => $sender->getCanonicalName(),
+					"body"     => $text ?: "📎",
+					"ava"      => $sender->getAvatarUrl(),
+					"priority" => 2,
+				    ]);
+				    return;
+				}
+			    }
+			    break;
+			}
 
-                    break;
+			// Обычное уведомление — старый код
+			$data         = (object) [];
+			$notification = $this->notifs->fromDescriptor($descriptor, $data);
+			if (!$notification) {
+			    $reject(1982, "Server Error");
+			    return;
+			}
+			$tplDir = __DIR__ . "/../Web/Presenters/templates/components/notifications/";
+			$tplId  = "$tplDir$data->actionCode/_$data->originModelType" . "_" . $data->targetModelType . "_.latte";
+			$latte  = new TemplatingEngine();
+			$latte->setTempDirectory(CHANDLER_ROOT . "/tmp/cache/templates");
+			$latte->addExtension(new \Latte\Essential\TranslatorExtension(tr(...)));
+			$resolve([
+			    "title"    => tr("notif_" . $data->actionCode . "_" . $data->originModelType . "_" . $data->targetModelType),
+			    "body"     => trim(preg_replace('%(\s){2,}%', "$1", $latte->renderToString($tplId, ["notification" => $notification]))),
+			    "ava"      => $notification->getModel(1)->getAvatarUrl(),
+			    "priority" => 1,
+			]);
+			return;
+		    }
+		    break;
+
                 case RD_KAFKA_RESP_ERR__TIMED_OUT:
                 case RD_KAFKA_RESP_ERR__PARTITION_EOF:
                     $reject(1983, "Nothing to report");

@@ -7,7 +7,8 @@ var counter = 0;
 window.baseTitle = document.title;
 
 function updateTitle() {
-    document.title = counter > 0 ? `(${counter}) ${window.baseTitle}` : window.baseTitle;
+    var msgCount = window._unreadMsgCount || 0;
+    document.title = msgCount > 0 ? `(${msgCount}) ${window.baseTitle}` : window.baseTitle;
 }
 
 window.setBaseTitle = function(title) {
@@ -17,7 +18,8 @@ window.setBaseTitle = function(title) {
 
 window.addEventListener("focus", () => {
     counter = 0;
-    updateTitle();
+    if (typeof window._fetchMsgCount === 'function') window._fetchMsgCount();
+    else updateTitle();
 });
 
 function NewNotification(title, body, avatar = null, callback = () => {}, time = 5000, count = true) {
